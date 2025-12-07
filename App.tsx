@@ -1,0 +1,266 @@
+
+import React, { useState, useEffect } from 'react';
+import GameCanvas from './components/GameCanvas';
+import Dice from './components/Dice';
+import { Trophy, Skull, Lock, ArrowRight } from 'lucide-react';
+import { BlockType, PowerUpType } from './types';
+import { DICE_BLOCK_OPTIONS, DICE_POWERUP_OPTIONS } from './constants';
+
+interface LevelProgress {
+  [levelId: number]: {
+    startedAt?: string;
+    completedAt?: string;
+  }
+}
+
+const App: React.FC = () => {
+  const [gameState, setGameState] = useState<'start' | 'playing' | 'gameover' | 'win' | 'reroll'>('start');
+  const [unlockedLevels, setUnlockedLevels] = useState(1);
+  const [selectedLevel, setSelectedLevel] = useState(1);
+  const [progress, setProgress] = useState<LevelProgress>({});
+  const [gameId, setGameId] = useState(0); 
+
+  // Loadout State
+  const [blockType, setBlockType] = useState<BlockType | null>(null);
+  const [powerUpType, setPowerUpType] = useState<PowerUpType | null>(null);
+  const [diceRolled, setDiceRolled] = useState(false);
+
+  // Auto-lock when both rolled
+  useEffect(() => {
+      if (blockType && powerUpType && !diceRolled) {
+          // Add a tiny delay for animation feeling, but make it snappy
+          const t = setTimeout(() => {
+              setDiceRolled(true);
+          }, 100); 
+          return () => clearTimeout(t);
+      }
+  }, [blockType, powerUpType, diceRolled]);
+
+  // Load progress
+  useEffect(() => {
+    try {
+      const savedProgress = localStorage.getItem('roboAdventureProgress');
+      if (savedProgress) {
+        const parsed = JSON.parse(savedProgress) as LevelProgress;
+        setProgress(parsed);
+        let maxUnlocked = 1;
+        for (let i = 1; i <= 3; i++) {
+           if (parsed[i]?.completedAt) {
+               maxUnlocked = Math.max(maxUnlocked, i + 1);
+           }
+        }
+        setUnlockedLevels(Math.min(maxUnlocked, 3));
+      }
+    } catch (e) {
+      console.error("Failed to load progress", e);
+    }
+  }, []);
+
+  const saveProgress = (newProgress: LevelProgress) => {
+      setProgress(newProgress);
+      localStorage.setItem('roboAdventureProgress', JSON.stringify(newProgress));
+  };
+
+  const startGame = (level: number) => {
+    if (!blockType || !powerUpType) return; // Should allow starting only if loaded out
+    
+    setSelectedLevel(level);
+    setGameId(prev => prev + 1);
+    
+    const newProgress = { ...progress };
+    if (!newProgress[level]) newProgress[level] = {};
+    newProgress[level].startedAt = new Date().toISOString();
+    saveProgress(newProgress);
+
+    setGameState('playing');
+  };
+  
+  const handleGameOver = (level: number) => {
+    setGameState('gameover');
+  };
+
+  const handleWin = () => {
+    const newProgress = { ...progress };
+    if (!newProgress[selectedLevel]) newProgress[selectedLevel] = {};
+    newProgress[selectedLevel].completedAt = new Date().toISOString();
+    saveProgress(newProgress);
+
+    const nextLevel = selectedLevel + 1;
+    if (nextLevel <= 3 && nextLevel > unlockedLevels) {
+      setUnlockedLevels(nextLevel);
+    }
+    
+    // Go to Re-roll screen if there is a next level, otherwise simple Win screen
+    if (nextLevel <= 3) {
+        setGameState('reroll');
+    } else {
+        setGameState('win'); // Game fully beat
+    }
+  };
+
+  const handleHome = () => {
+    resetLoadout();
+    setGameState('start');
+  };
+
+  const resetLoadout = () => {
+      setBlockType(null);
+      setPowerUpType(null);
+      setDiceRolled(false);
+  };
+  
+  // Handlers for Dice
+  const handleBlockRoll = (result: BlockType) => setBlockType(result);
+  const handlePowerUpRoll = (result: PowerUpType) => setPowerUpType(result);
+
+  return (
+    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center p-4">
+      {/* Show Header ONLY in Menu screens, not during gameplay */}
+      {gameState !== 'playing' && (
+          <header className="mb-4 text-center">
+            <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 mb-2 font-['Press_Start_2P']">
+              TINY ROBO: THE DICE QUEST
+            </h1>
+            <p className="text-gray-400 text-sm md:text-base">Find the dice to escape the living room!</p>
+          </header>
+      )}
+
+      <main className="w-full max-w-5xl">
+        {gameState === 'start' && (
+          <div className="bg-gray-800 p-10 rounded-xl shadow-2xl text-center border-2 border-gray-700">
+             
+             {/* Dice Section */}
+             <div className="bg-gray-900 p-6 rounded-lg mb-8 border border-gray-700">
+                 <h2 className="text-white font-bold mb-4">SETUP YOUR LOADOUT</h2>
+                 <div className="flex justify-center gap-12 items-center">
+                     <Dice 
+                        label="BLOCK TYPE" 
+                        options={DICE_BLOCK_OPTIONS} 
+                        onRollComplete={handleBlockRoll} 
+                        locked={diceRolled}
+                     />
+                     <Dice 
+                        label="POWER UP" 
+                        options={DICE_POWERUP_OPTIONS} 
+                        onRollComplete={handlePowerUpRoll} 
+                        locked={diceRolled}
+                     />
+                 </div>
+             </div>
+
+             <div className={`transition-opacity duration-500 ${diceRolled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                 <h3 className="text-white text-xl mb-4 font-bold">SELECT LEVEL</h3>
+                 <div className="flex justify-center gap-4 mb-8">
+                    {[1, 2, 3].map((level) => (
+                      <button
+                        key={level}
+                        disabled={level > unlockedLevels}
+                        onClick={() => startGame(level)}
+                        className={`w-24 h-24 rounded-lg flex flex-col items-center justify-center text-2xl font-bold transition-transform transform hover:scale-105 shadow-lg border-b-4 
+                          ${level <= unlockedLevels 
+                            ? 'bg-blue-600 border-blue-800 text-white hover:bg-blue-500 cursor-pointer active:translate-y-1 active:border-b-0' 
+                            : 'bg-gray-700 border-gray-800 text-gray-500 cursor-not-allowed opacity-70'
+                          }`}
+                      >
+                        {level > unlockedLevels ? <Lock size={24} /> : level}
+                        {/* Difficulty labels removed as requested */}
+                        {progress[level]?.completedAt && <span className="text-[10px] text-green-300 mt-1">✔ DONE</span>}
+                      </button>
+                    ))}
+                 </div>
+             </div>
+             
+             {!diceRolled && (
+                 <p className="text-yellow-500 text-sm mt-4">Roll both dice to unlock level selection!</p>
+             )}
+          </div>
+        )}
+
+        {gameState === 'playing' && blockType && powerUpType && (
+          <GameCanvas 
+            key={`${selectedLevel}-${gameId}`} 
+            startLevel={selectedLevel}
+            activeBlockType={blockType}
+            activePowerUp={powerUpType}
+            onGameOver={handleGameOver} 
+            onWin={handleWin}
+            onHome={handleHome}
+          />
+        )}
+
+        {gameState === 'gameover' && (
+          <div className="bg-gray-800 p-10 rounded-xl shadow-2xl text-center border-2 border-red-900">
+             <Skull className="w-24 h-24 text-red-500 mx-auto mb-4" />
+             <h2 className="text-4xl text-red-500 mb-4 font-bold">GAME OVER</h2>
+             <p className="text-white mb-8">The living room conquered you this time.</p>
+             <div className="flex gap-4 justify-center">
+                <button 
+                  onClick={handleHome}
+                  className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-lg text-lg transition-colors"
+                >
+                  MAIN MENU
+                </button>
+                <button 
+                  onClick={() => startGame(selectedLevel)}
+                  className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-lg text-lg transition-colors shadow-[0_4px_0_rgb(30,58,138)] active:translate-y-1 active:shadow-none"
+                >
+                  RETRY LEVEL {selectedLevel}
+                </button>
+             </div>
+          </div>
+        )}
+
+        {/* Re-roll Screen (Win Intermediate) */}
+        {gameState === 'reroll' && (
+            <div className="bg-gray-800 p-10 rounded-xl shadow-2xl text-center border-2 border-purple-600">
+                 <Trophy className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
+                 <h2 className="text-3xl text-white mb-2 font-bold">LEVEL COMPLETE!</h2>
+                 <p className="text-gray-300 mb-8">Choose one dice to re-roll for the next level, or keep your setup.</p>
+                 
+                 <div className="bg-gray-900 p-8 rounded-lg mb-8 flex justify-center gap-12">
+                     <div className="flex flex-col items-center">
+                         <span className="text-white text-xs mb-2">CURRENT: {blockType}</span>
+                         <Dice 
+                            label="RE-ROLL BLOCK?" 
+                            options={DICE_BLOCK_OPTIONS} 
+                            onRollComplete={handleBlockRoll} 
+                         />
+                     </div>
+                     <div className="flex flex-col items-center">
+                         <span className="text-white text-xs mb-2">CURRENT: {powerUpType}</span>
+                         <Dice 
+                            label="RE-ROLL POWER?" 
+                            options={DICE_POWERUP_OPTIONS} 
+                            onRollComplete={handlePowerUpRoll} 
+                         />
+                     </div>
+                 </div>
+
+                 <button 
+                    onClick={() => startGame(selectedLevel + 1)}
+                    className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 px-10 rounded-lg text-xl transition-colors shadow-[0_4px_0_rgb(88,28,135)] active:translate-y-1 active:shadow-none flex items-center gap-2 mx-auto"
+                 >
+                   START LEVEL {selectedLevel + 1} <ArrowRight />
+                 </button>
+            </div>
+        )}
+
+        {gameState === 'win' && (
+          <div className="bg-gray-800 p-10 rounded-xl shadow-2xl text-center border-2 border-yellow-600">
+             <Trophy className="w-24 h-24 text-yellow-400 mx-auto mb-4" />
+             <h2 className="text-4xl text-yellow-400 mb-4 font-bold">VICTORY!</h2>
+             <p className="text-white mb-8">You have conquered the entire house!</p>
+             <button 
+                onClick={handleHome}
+                className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-lg text-lg transition-colors"
+             >
+               MAIN MENU
+             </button>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+};
+
+export default App;

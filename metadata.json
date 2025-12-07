@@ -1,0 +1,5 @@
+{
+  "name": "Tiny Robo: The Dice Quest",
+  "description": "A 2D platformer where a tiny robot navigates a giant living room. Use WASD to move, F to build blocks, and reach the dice checkpoints!",
+  "requestFramePermissions": []
+}

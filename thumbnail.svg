@@ -1,0 +1,37 @@
+<svg width="500" height="500" viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
+  <!-- Background -->
+  <rect width="500" height="500" fill="#1f2937"/>
+  
+  <!-- Central Circle -->
+  <circle cx="250" cy="250" r="200" fill="#374151"/>
+
+  <!-- Robot Head Large -->
+  <g transform="translate(150, 150) scale(6)">
+    <!-- Antenna -->
+    <rect x="15" y="0" width="2" height="8" fill="#2c3e50"/>
+    <rect x="14" y="-2" width="4" height="4" fill="#e74c3c"/>
+    
+    <!-- Head -->
+    <rect x="4" y="8" width="24" height="24" fill="#95a5a6"/>
+    <rect x="4" y="8" width="24" height="24" fill="none" stroke="#2c3e50" stroke-width="1"/>
+    
+    <!-- Visor -->
+    <rect x="8" y="14" width="16" height="6" fill="#3498db"/>
+    <rect x="10" y="15" width="2" height="2" fill="white" opacity="0.5"/>
+  </g>
+
+  <!-- Floating Dice -->
+  <g transform="translate(320, 120) rotate(20) scale(2)">
+     <rect x="0" y="0" width="30" height="30" fill="#ffffff" stroke="#000" stroke-width="2"/>
+     <circle cx="15" cy="15" r="3" fill="#e74c3c"/>
+  </g>
+
+  <g transform="translate(80, 300) rotate(-15) scale(2)">
+     <rect x="0" y="0" width="30" height="30" fill="#ffffff" stroke="#000" stroke-width="2"/>
+     <circle cx="8" cy="8" r="3" fill="#000"/>
+     <circle cx="22" cy="22" r="3" fill="#000"/>
+  </g>
+
+  <!-- Title Text Small at Bottom -->
+  <text x="250" y="450" font-family="monospace" font-weight="bold" font-size="30" fill="#facc15" text-anchor="middle">TINY ROBO</text>
+</svg>
