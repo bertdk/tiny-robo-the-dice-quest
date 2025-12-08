@@ -1,7 +1,6 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { 
-    CANVAS_WIDTH, CANVAS_HEIGHT, TILE_SIZE, GRAVITY, JUMP_FORCE, MOVE_SPEED, 
+    CANVAS_WIDTH as DEFAULT_CANVAS_WIDTH, CANVAS_HEIGHT as DEFAULT_CANVAS_HEIGHT, TILE_SIZE, GRAVITY, JUMP_FORCE, MOVE_SPEED, 
     InputKeys, PLAYER_WIDTH, PLAYER_HEIGHT, DUCK_HEIGHT, MAX_FALL_SPEED, COLORS,
     MS_PER_UPDATE, LASER_SPEED, PHASE_DURATION, SPEED_BOOST_MULTIPLIER, GRAVITY_BOOTS_MULTIPLIER,
     DICE_BLOCK_OPTIONS, BLOCK_COLORS, DICE_POWERUP_OPTIONS
@@ -13,7 +12,7 @@ import {
 import { createLevel } from '../utils/levelGenerator';
 import { drawRect, drawRobot, drawSpike, drawSpider, drawCheckpoint, drawLamp, drawIntroDice, drawFlyingFace, drawProjectile, drawBuiltBlock, drawMovingPlatform } from '../utils/renderer';
 import { audioManager } from '../utils/audioManager';
-import { Heart, Pause, Play, Eye, Map, Volume2, VolumeX, Home, Clock } from 'lucide-react';
+import { Heart, Pause, Play, Eye, Map, Volume2, VolumeX, Home, Clock, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Crosshair, Hammer, Zap, SkipForward } from 'lucide-react';
 
 interface GameCanvasProps {
     startLevel: number;
@@ -30,6 +29,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
     const previousTimeRef = useRef<number>(0);
     const lagRef = useRef<number>(0);
     const deathTimeoutRef = useRef<number | null>(null);
+    
+    // Dynamic Canvas Dimensions
+    const [canvasSize, setCanvasSize] = useState({ width: DEFAULT_CANVAS_WIDTH, height: DEFAULT_CANVAS_HEIGHT });
+    const canvasSizeRef = useRef({ width: DEFAULT_CANVAS_WIDTH, height: DEFAULT_CANVAS_HEIGHT });
     
     const keysPressed = useRef<Set<string>>(new Set());
     const jumpAllowed = useRef(true); 
@@ -87,10 +90,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
     const [isBuildMode, setIsBuildMode] = useState(false); // UI State
     const [isIntroActive, setIsIntroActive] = useState(true); // State to trigger re-renders for UI
     const [timeLeft, setTimeLeft] = useState<number>(0); // UI State for Timer
+    const [isTouchDevice, setIsTouchDevice] = useState(false);
 
-    // Refs for state access in event listeners
+    // Refs for state access in event listeners and loop
     const isPausedRef = useRef(isPaused);
     const viewModeRef = useRef(viewMode);
+    const isTouchDeviceRef = useRef(false);
 
     // Icons/Data for HUD and Pause Menu
     const blockOption = DICE_BLOCK_OPTIONS.find(o => o.type === activeBlockType);
@@ -116,8 +121,46 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
     }, [viewMode]);
 
     useEffect(() => {
+        // Initialize logic for determining canvas size based on window aspect ratio
+        const handleResize = () => {
+            const aspect = window.innerWidth / window.innerHeight;
+            let newWidth, newHeight;
+
+            // Base tile targets to ensure consistent "zoom" level
+            if (aspect >= 1) {
+                // Landscape: Fix height to ~19 tiles (768px), scale width
+                newHeight = 768;
+                newWidth = newHeight * aspect;
+            } else {
+                // Portrait: Fix width to ~16 tiles (640px), scale height
+                // This makes vertical view "taller" (seeing deeper)
+                newWidth = 640;
+                newHeight = newWidth / aspect;
+            }
+            
+            // Limit max internal resolution to prevent performance issues on huge screens
+            const MAX_DIM = 2560;
+            if (newWidth > MAX_DIM || newHeight > MAX_DIM) {
+                const scale = MAX_DIM / Math.max(newWidth, newHeight);
+                newWidth *= scale;
+                newHeight *= scale;
+            }
+
+            const dims = { width: Math.round(newWidth), height: Math.round(newHeight) };
+            setCanvasSize(dims);
+            canvasSizeRef.current = dims;
+        };
+
+        window.addEventListener('resize', handleResize);
+        handleResize(); // Initial call
+
         // Initialize level on mount ONLY
         resetLevel(startLevel, 0, true);
+        
+        // Touch Detection
+        const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        setIsTouchDevice(hasTouch);
+        isTouchDeviceRef.current = hasTouch;
         
         const handleInteraction = () => {
              if (!hasInitializedAudio.current) {
@@ -131,12 +174,16 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
         const handleKeyDown = (e: KeyboardEvent) => {
             handleInteraction();
             const k = e.key.toLowerCase();
-            let mappedKey = k;
             
-            // Map arrow keys to simplified codes if needed or handle duplicates in InputKeys
-            // The InputKeys enum has correct mapping for event.key usually
-            
-            keysPressed.current.add(k === ' ' ? InputKeys.SPACE : k);
+            // Map Arrows to WASD for consistent internal handling
+            let key = k;
+            if (k === 'arrowup') key = InputKeys.W;
+            else if (k === 'arrowdown') key = InputKeys.S;
+            else if (k === 'arrowleft') key = InputKeys.A;
+            else if (k === 'arrowright') key = InputKeys.D;
+            else if (k === ' ') key = InputKeys.SPACE;
+
+            keysPressed.current.add(key);
             
             if (viewModeRef.current) {
                 if (k === InputKeys.ESCAPE || k === InputKeys.SPACE) {
@@ -147,7 +194,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
             }
             
             if (introState.current.active) {
-                if (k === InputKeys.SPACE) {
+                if (k === InputKeys.SPACE && !isTouchDeviceRef.current) {
                     skipIntro();
                 }
                 return;
@@ -160,12 +207,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
             if (isPausedRef.current || player.current.state === 'dead') return; 
 
             if (k === InputKeys.F) {
-                player.current.buildMode = !player.current.buildMode;
-                setIsBuildMode(player.current.buildMode); 
+                toggleBuildMode();
             }
             
             // Consolidated Space Action
-            if (e.key === InputKeys.SPACE) {
+            if (k === InputKeys.SPACE) {
                 if (canActionRef.current) {
                     if (player.current.buildMode) {
                         handleBuild();
@@ -179,9 +225,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
 
         const handleKeyUp = (e: KeyboardEvent) => {
             const k = e.key.toLowerCase();
-            keysPressed.current.delete(k === ' ' ? InputKeys.SPACE : k);
+             // Map Arrows to WASD
+            let key = k;
+            if (k === 'arrowup') key = InputKeys.W;
+            else if (k === 'arrowdown') key = InputKeys.S;
+            else if (k === 'arrowleft') key = InputKeys.A;
+            else if (k === 'arrowright') key = InputKeys.D;
+            else if (k === ' ') key = InputKeys.SPACE;
+
+            keysPressed.current.delete(key);
             
-            if (e.key === InputKeys.SPACE) canActionRef.current = true;
+            if (k === ' ') canActionRef.current = true;
         };
 
         window.addEventListener('keydown', handleKeyDown);
@@ -191,6 +245,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
         requestRef.current = requestAnimationFrame(gameLoop);
 
         return () => {
+            window.removeEventListener('resize', handleResize);
             window.removeEventListener('keydown', handleKeyDown);
             window.removeEventListener('keyup', handleKeyUp);
             window.removeEventListener('click', handleInteraction);
@@ -201,6 +256,53 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); 
+
+    const toggleBuildMode = () => {
+        player.current.buildMode = !player.current.buildMode;
+        setIsBuildMode(player.current.buildMode);
+    };
+
+    // Touch Controls
+    const handleTouchStart = (key: string) => {
+        if (!hasInitializedAudio.current) {
+             audioManager.init();
+             audioManager.resume();
+             audioManager.startMusic();
+             hasInitializedAudio.current = true;
+        }
+
+        if (introState.current.active && key === InputKeys.SPACE) {
+            skipIntro();
+            return;
+        }
+
+        if (key === InputKeys.F) {
+            toggleBuildMode();
+            return;
+        }
+
+        keysPressed.current.add(key);
+        
+        if (key === InputKeys.SPACE) {
+            if (canActionRef.current) {
+                 if (player.current.buildMode) {
+                     handleBuild();
+                 } else {
+                     handleAction();
+                 }
+                 canActionRef.current = false;
+            }
+        }
+    };
+
+    const handleTouchEnd = (key: string) => {
+        if (key !== InputKeys.F) {
+            keysPressed.current.delete(key);
+        }
+        if (key === InputKeys.SPACE) {
+            canActionRef.current = true;
+        }
+    };
 
     const toggleViewMode = () => {
         if (!viewMode) {
@@ -234,8 +336,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
             }
         });
 
-        const targetX = player.current.x - CANVAS_WIDTH / 2;
-        camera.current.x = Math.max(0, Math.min(targetX, levelData.current.width - CANVAS_WIDTH));
+        const targetX = player.current.x - canvasSizeRef.current.width / 2;
+        camera.current.x = Math.max(0, Math.min(targetX, levelData.current.width - canvasSizeRef.current.width));
     };
 
     const resetLevel = (lvlIndex: number, checkpointIndex: number, showIntro: boolean, preservedTime?: number) => {
@@ -303,7 +405,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
             introState.current = { active: false, x: 0, rotation: 0, nextCheckpointIndex: checkpointIndex + 1 };
             setIsIntroActive(false);
             audioManager.stopRolling();
-            camera.current.x = Math.max(0, Math.min(spawn.x - CANVAS_WIDTH / 2, levelData.current.width - CANVAS_WIDTH));
+            
+            // Use current canvas dimensions for camera centering
+            const w = canvasSizeRef.current.width;
+            camera.current.x = Math.max(0, Math.min(spawn.x - w / 2, levelData.current.width - w));
         }
         
         setIsBuildMode(false);
@@ -454,16 +559,18 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
     const updateViewModeCamera = () => {
         const speed = 10;
         const keys = keysPressed.current;
+        const width = canvasSizeRef.current.width;
         if (keys.has(InputKeys.A) || keys.has(InputKeys.ARROW_LEFT)) viewCamera.current.x -= speed;
         if (keys.has(InputKeys.D) || keys.has(InputKeys.ARROW_RIGHT)) viewCamera.current.x += speed;
 
-        viewCamera.current.x = Math.max(0, Math.min(viewCamera.current.x, levelData.current.width - CANVAS_WIDTH));
+        viewCamera.current.x = Math.max(0, Math.min(viewCamera.current.x, levelData.current.width - width));
     };
 
     const updateIntroLogic = () => {
         const speed = 15;
         const groundY = 14 * TILE_SIZE; 
         const diceSize = TILE_SIZE * 2;
+        const width = canvasSizeRef.current.width;
         
         introState.current.x += speed;
         introState.current.rotation += 0.2;
@@ -504,8 +611,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
             }
         });
 
-        camera.current.x = introState.current.x - CANVAS_WIDTH / 2;
-        camera.current.x = Math.max(0, Math.min(camera.current.x, levelData.current.width - CANVAS_WIDTH));
+        camera.current.x = introState.current.x - width / 2;
+        camera.current.x = Math.max(0, Math.min(camera.current.x, levelData.current.width - width));
 
         // Stop Intro Logic
         // Ensure dice goes past level width to trigger visibility for all (safeguard)
@@ -672,7 +779,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
         else if (Math.abs(p.vx) > 0) p.state = 'running';
         else p.state = 'idle';
 
-        if (p.y > CANVAS_HEIGHT + 200) {
+        if (p.y > canvasSizeRef.current.height + 200) {
             handleLifeLost();
         }
 
@@ -729,7 +836,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                 
                 if (e.falling) {
                     e.y += 10; // Fast fall
-                    if (e.y > CANVAS_HEIGHT) {
+                    if (e.y > canvasSizeRef.current.height) {
                         entities.splice(i, 1);
                         continue;
                     }
@@ -830,7 +937,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                              }
                         }
                     }
-                    if (e.y > CANVAS_HEIGHT + 100) entities.splice(i, 1); // remove if fell out
+                    if (e.y > canvasSizeRef.current.height + 100) entities.splice(i, 1); // remove if fell out
                 }
             }
 
@@ -955,11 +1062,41 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
     };
 
     const updateCamera = () => {
-        let targetX = player.current.x - CANVAS_WIDTH / 2;
-        targetX = Math.max(0, Math.min(targetX, levelData.current.width - CANVAS_WIDTH));
-        let targetY = player.current.y - CANVAS_HEIGHT / 1.5;
-        targetY = Math.max(0, Math.min(targetY, levelData.current.height - CANVAS_HEIGHT)); 
+        const { width, height } = canvasSizeRef.current;
+        const isPortrait = height > width;
+        
+        // Calculate Camera Y Offset
+        // Larger offset = Camera looks higher up = Player appears lower on screen
+        // Smaller offset = Camera looks lower down = Player appears higher on screen
+        let offsetY;
+        if (isTouchDeviceRef.current) {
+            if (isPortrait) {
+                // Portrait: Player higher up (ground lower) -> Smaller offset
+                offsetY = height / 1.6; 
+            } else {
+                // Landscape: Player standard high for controls -> Medium offset
+                offsetY = height / 2.2;
+            }
+        } else {
+            // Desktop: Player lower (standard platformer view) -> Large offset
+            offsetY = height / 1.5;
+        }
+        
+        let targetX = player.current.x - width / 2;
+        targetX = Math.max(0, Math.min(targetX, levelData.current.width - width));
+        
+        // Prevent camera shaking when ducking
+        // Use the standing Y position even if ducking
+        let trackY = player.current.y;
+        if (player.current.isDucking) {
+            trackY -= (PLAYER_HEIGHT - DUCK_HEIGHT);
+        }
+
+        let targetY = trackY - offsetY;
+        targetY = Math.max(0, Math.min(targetY, levelData.current.height - height)); 
+        
         camera.current.x += (targetX - camera.current.x) * 0.1;
+        camera.current.y += (targetY - camera.current.y) * 0.1;
     };
 
     const gameLoop = (time: number) => {
@@ -999,15 +1136,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
             const activeCam = introState.current.active 
                 ? camera.current 
                 : viewModeRef.current ? viewCamera.current : camera.current;
-                    
+            
+            const { width, height } = canvasSizeRef.current;
+            
             if (!viewModeRef.current && !introState.current.active) updateCamera();
 
             ctx.fillStyle = COLORS.background;
-            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            ctx.fillRect(0, 0, width, height);
             
             const entities = levelData.current.entities;
             const visibleEntities = entities.filter(e => 
-                e.x + e.width > activeCam.x && e.x < activeCam.x + CANVAS_WIDTH
+                e.x + e.width > activeCam.x && e.x < activeCam.x + width
             );
 
             visibleEntities.forEach(e => {
@@ -1098,42 +1237,121 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
     };
 
     return (
-        <div className="relative border-4 border-gray-800 rounded-lg shadow-2xl overflow-hidden bg-gray-900">
+        <div className="fixed inset-0 w-full h-full bg-black flex items-center justify-center overflow-hidden touch-none">
             <canvas 
                 ref={canvasRef}
-                width={CANVAS_WIDTH} 
-                height={CANVAS_HEIGHT}
-                className="block bg-gray-100"
+                width={canvasSize.width} 
+                height={canvasSize.height}
+                className="block max-w-full max-h-full object-contain"
             />
             
             {viewMode && (
-                <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-indigo-900/90 text-white px-6 py-2 rounded-full font-bold shadow-lg animate-pulse flex items-center gap-2 border border-indigo-500">
+                <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-indigo-900/90 text-white px-6 py-2 rounded-full font-bold shadow-lg animate-pulse flex items-center gap-2 border border-indigo-500 z-20">
                     <Map size={18} />
                     VIEW MODE ACTIVE - [A/D] TO MOVE - [ESC/SPACE] TO EXIT
                 </div>
             )}
             
-            {isIntroActive && (
-                <div className="absolute bottom-8 right-8 text-white font-bold text-lg animate-pulse select-none pointer-events-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
+            {isIntroActive && !isTouchDevice && (
+                <div className="absolute bottom-8 right-8 text-white font-bold text-lg animate-pulse select-none pointer-events-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] z-20">
                     PRESS [SPACE] TO SKIP
+                </div>
+            )}
+
+            {/* TOUCH SPECIFIC SKIP BUTTON */}
+            {isIntroActive && isTouchDevice && (
+                <button 
+                    onClick={skipIntro}
+                    className="absolute bottom-4 right-4 bg-white/20 backdrop-blur-md border border-white/50 text-white px-6 py-3 rounded-full font-bold shadow-lg active:scale-95 z-40 flex items-center gap-2"
+                >
+                    SKIP <SkipForward size={20} fill="currentColor" />
+                </button>
+            )}
+            
+            {/* MOBILE CONTROLS OVERLAY - Hidden during intro or view mode */}
+            {!viewMode && !isPaused && isTouchDevice && !isIntroActive && (
+                <div className="absolute inset-0 pointer-events-none z-30 lg:hidden">
+                    <div className="absolute bottom-4 left-4 flex gap-1 pointer-events-auto landscape:bottom-4 landscape:left-4">
+                        <button 
+                            className="w-12 h-12 sm:w-16 sm:h-16 landscape:w-12 landscape:h-12 landscape:sm:w-12 landscape:sm:h-12 bg-white/20 backdrop-blur-sm rounded-full border-2 border-white/40 flex items-center justify-center active:bg-white/40 touch-none"
+                            onTouchStart={() => handleTouchStart(InputKeys.A)}
+                            onTouchEnd={() => handleTouchEnd(InputKeys.A)}
+                        >
+                            <ArrowLeft size={20} className="text-white sm:w-8 sm:h-8 landscape:w-6 landscape:h-6" />
+                        </button>
+                        <div className="flex flex-col gap-1 sm:gap-2">
+                             <div className="w-12 h-12 sm:w-16 sm:h-16 landscape:w-12 landscape:h-12 landscape:sm:w-12 landscape:sm:h-12"></div> {/* Spacer */}
+                             <button 
+                                className="w-12 h-12 sm:w-16 sm:h-16 landscape:w-12 landscape:h-12 landscape:sm:w-12 landscape:sm:h-12 bg-white/20 backdrop-blur-sm rounded-full border-2 border-white/40 flex items-center justify-center active:bg-white/40 touch-none"
+                                onTouchStart={() => handleTouchStart(InputKeys.S)}
+                                onTouchEnd={() => handleTouchEnd(InputKeys.S)}
+                            >
+                                <ArrowDown size={20} className="text-white sm:w-8 sm:h-8 landscape:w-6 landscape:h-6" />
+                            </button>
+                        </div>
+                        <button 
+                            className="w-12 h-12 sm:w-16 sm:h-16 landscape:w-12 landscape:h-12 landscape:sm:w-12 landscape:sm:h-12 bg-white/20 backdrop-blur-sm rounded-full border-2 border-white/40 flex items-center justify-center active:bg-white/40 touch-none"
+                            onTouchStart={() => handleTouchStart(InputKeys.D)}
+                            onTouchEnd={() => handleTouchEnd(InputKeys.D)}
+                        >
+                            <ArrowRight size={20} className="text-white sm:w-8 sm:h-8 landscape:w-6 landscape:h-6" />
+                        </button>
+                    </div>
+
+                    <div className="absolute bottom-4 right-4 flex gap-2 pointer-events-auto items-end landscape:bottom-4 landscape:right-4">
+                         {/* Toggle Build Mode */}
+                         <button 
+                            className={`w-10 h-10 sm:w-14 sm:h-14 landscape:w-10 landscape:h-10 landscape:sm:w-12 landscape:sm:h-12 rounded-full border-2 flex items-center justify-center active:scale-95 transition-colors touch-none ${isBuildMode ? 'bg-orange-500 border-yellow-300' : 'bg-gray-700/50 border-white/30'}`}
+                            onTouchStart={() => handleTouchStart(InputKeys.F)}
+                            onTouchEnd={() => handleTouchEnd(InputKeys.F)}
+                        >
+                            <Hammer size={18} className="text-white sm:w-6 sm:h-6 landscape:w-5 landscape:h-5" />
+                        </button>
+                        
+                        <div className="flex flex-col gap-2 sm:gap-4">
+                            <button 
+                                className="w-12 h-12 sm:w-16 sm:h-16 landscape:w-12 landscape:h-12 landscape:sm:w-12 landscape:sm:h-12 bg-blue-500/30 backdrop-blur-sm rounded-full border-2 border-blue-300/50 flex items-center justify-center active:bg-blue-500/50 touch-none"
+                                onTouchStart={() => handleTouchStart(InputKeys.W)}
+                                onTouchEnd={() => handleTouchEnd(InputKeys.W)}
+                            >
+                                <ArrowUp size={20} className="text-white sm:w-8 sm:h-8 landscape:w-6 landscape:h-6" />
+                            </button>
+                            <button 
+                                className={`w-16 h-16 sm:w-20 sm:h-20 landscape:w-14 landscape:h-14 landscape:sm:w-16 landscape:sm:h-16 rounded-full border-2 border-white/40 flex items-center justify-center active:scale-95 shadow-lg touch-none ${isBuildMode ? 'bg-yellow-500/40' : 'bg-red-500/40'}`}
+                                onTouchStart={() => handleTouchStart(InputKeys.SPACE)}
+                                onTouchEnd={() => handleTouchEnd(InputKeys.SPACE)}
+                            >
+                                {isBuildMode ? (
+                                    <Hammer size={24} className="text-white sm:w-8 sm:h-8 landscape:w-6 landscape:h-6" />
+                                ) : activePowerUp === PowerUpType.LASER ? (
+                                    <Crosshair size={24} className="text-white sm:w-8 sm:h-8 landscape:w-6 landscape:h-6" />
+                                ) : activePowerUp === PowerUpType.PHASE ? (
+                                    <Zap size={24} className="text-white sm:w-8 sm:h-8 landscape:w-6 landscape:h-6" />
+                                ) : (
+                                    <div className="w-6 h-6 rounded-full bg-white/50" /> 
+                                )}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
             
             {!viewMode && !isIntroActive && (
-                <div className="absolute top-4 left-0 right-0 px-4 grid grid-cols-3 items-start pointer-events-none">
+                <div className="absolute top-4 left-0 right-0 px-4 grid grid-cols-3 items-start pointer-events-none z-10">
                     {/* Left: Level & Lives */}
-                    <div className="flex gap-4 items-center justify-start">
-                        <div className="bg-black/50 px-3 py-1 rounded flex items-center gap-2 text-white font-bold text-lg">
+                    <div className="flex gap-2 sm:gap-4 items-center justify-start flex-wrap">
+                        <div className="bg-black/50 px-2 sm:px-3 py-1 rounded flex items-center gap-2 text-white font-bold text-xs sm:text-lg whitespace-nowrap">
                             <span>Level: {currentLevel}</span>
                         </div>
-                        <div className="bg-black/50 px-3 py-1 rounded flex items-center gap-1 text-red-500">
+                        <div className="bg-black/50 px-2 sm:px-3 py-1 rounded flex items-center gap-1 text-red-500">
                             {[...Array(5)].map((_, i) => (
                                 i < lives && (
                                 <Heart 
                                     key={i} 
-                                    size={20} 
+                                    size={16} 
                                     fill="currentColor" 
                                     strokeWidth={2.5}
+                                    className="sm:w-5 sm:h-5"
                                 />
                                 )
                             ))}
@@ -1158,8 +1376,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                     </div>
 
                     {/* Right: Build Mode & Pause */}
-                    <div className="flex gap-4 justify-end pointer-events-auto items-start">
-                        <div className="flex flex-col items-end relative">
+                    <div className="flex gap-2 sm:gap-4 justify-end pointer-events-auto items-start">
+                        {/* Hide Build Mode Label on Touch Devices (lg:flex ensures it hides on lg-hidden screens) */}
+                        <div className="hidden lg:flex flex-col items-end relative">
                             <div className={`px-3 py-1 rounded flex items-center gap-2 transition-colors duration-200 text-lg font-bold ${isBuildMode ? 'bg-orange-600 ring-2 ring-yellow-400 text-white' : 'bg-black/50 text-gray-300'}`}>
                                 {isBuildMode ? 'BUILD MODE ON' : 'BUILD MODE'} <span className="text-xs bg-white/20 px-1 rounded">[F]</span>
                             </div>
@@ -1181,7 +1400,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
             )}
 
             {isPaused && !viewMode && (
-                <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10 backdrop-blur-sm">
+                <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10 backdrop-blur-sm p-4">
                     <div className="bg-gray-800 p-8 rounded-xl border-2 border-gray-600 text-center shadow-2xl max-w-md w-full">
                         <h2 className="text-3xl font-bold text-white mb-6">
                             PAUSED
@@ -1255,7 +1474,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                 </div>
             )}
             
-            <div className="absolute bottom-4 left-4 text-gray-500 text-xs pointer-events-none font-bold">
+            <div className="absolute bottom-4 left-4 text-gray-500 text-xs pointer-events-none font-bold hidden lg:block">
                 Controls: WASD / ARROWS to Move
             </div>
         </div>
