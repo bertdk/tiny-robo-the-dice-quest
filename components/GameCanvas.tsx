@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { 
-    CANVAS_WIDTH, CANVAS_HEIGHT, TILE_SIZE, GRAVITY, JUMP_FORCE, MOVE_SPEED, 
+    CANVAS_WIDTH as DEFAULT_CANVAS_WIDTH, CANVAS_HEIGHT as DEFAULT_CANVAS_HEIGHT, TILE_SIZE, GRAVITY, JUMP_FORCE, MOVE_SPEED, 
     InputKeys, PLAYER_WIDTH, PLAYER_HEIGHT, DUCK_HEIGHT, MAX_FALL_SPEED, COLORS,
     MS_PER_UPDATE, LASER_SPEED, PHASE_DURATION, SPEED_BOOST_MULTIPLIER, GRAVITY_BOOTS_MULTIPLIER,
     DICE_BLOCK_OPTIONS, BLOCK_COLORS, DICE_POWERUP_OPTIONS
@@ -29,6 +29,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
     const previousTimeRef = useRef<number>(0);
     const lagRef = useRef<number>(0);
     const deathTimeoutRef = useRef<number | null>(null);
+    
+    // Dynamic Canvas Dimensions
+    const [canvasSize, setCanvasSize] = useState({ width: DEFAULT_CANVAS_WIDTH, height: DEFAULT_CANVAS_HEIGHT });
+    const canvasSizeRef = useRef({ width: DEFAULT_CANVAS_WIDTH, height: DEFAULT_CANVAS_HEIGHT });
     
     const keysPressed = useRef<Set<string>>(new Set());
     const jumpAllowed = useRef(true); 
@@ -117,6 +121,39 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
     }, [viewMode]);
 
     useEffect(() => {
+        // Initialize logic for determining canvas size based on window aspect ratio
+        const handleResize = () => {
+            const aspect = window.innerWidth / window.innerHeight;
+            let newWidth, newHeight;
+
+            // Base tile targets to ensure consistent "zoom" level
+            if (aspect >= 1) {
+                // Landscape: Fix height to ~19 tiles (768px), scale width
+                newHeight = 768;
+                newWidth = newHeight * aspect;
+            } else {
+                // Portrait: Fix width to ~16 tiles (640px), scale height
+                // This makes vertical view "taller" (seeing deeper)
+                newWidth = 640;
+                newHeight = newWidth / aspect;
+            }
+            
+            // Limit max internal resolution to prevent performance issues on huge screens
+            const MAX_DIM = 2560;
+            if (newWidth > MAX_DIM || newHeight > MAX_DIM) {
+                const scale = MAX_DIM / Math.max(newWidth, newHeight);
+                newWidth *= scale;
+                newHeight *= scale;
+            }
+
+            const dims = { width: Math.round(newWidth), height: Math.round(newHeight) };
+            setCanvasSize(dims);
+            canvasSizeRef.current = dims;
+        };
+
+        window.addEventListener('resize', handleResize);
+        handleResize(); // Initial call
+
         // Initialize level on mount ONLY
         resetLevel(startLevel, 0, true);
         
@@ -208,6 +245,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
         requestRef.current = requestAnimationFrame(gameLoop);
 
         return () => {
+            window.removeEventListener('resize', handleResize);
             window.removeEventListener('keydown', handleKeyDown);
             window.removeEventListener('keyup', handleKeyUp);
             window.removeEventListener('click', handleInteraction);
@@ -298,8 +336,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
             }
         });
 
-        const targetX = player.current.x - CANVAS_WIDTH / 2;
-        camera.current.x = Math.max(0, Math.min(targetX, levelData.current.width - CANVAS_WIDTH));
+        const targetX = player.current.x - canvasSizeRef.current.width / 2;
+        camera.current.x = Math.max(0, Math.min(targetX, levelData.current.width - canvasSizeRef.current.width));
     };
 
     const resetLevel = (lvlIndex: number, checkpointIndex: number, showIntro: boolean, preservedTime?: number) => {
@@ -367,7 +405,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
             introState.current = { active: false, x: 0, rotation: 0, nextCheckpointIndex: checkpointIndex + 1 };
             setIsIntroActive(false);
             audioManager.stopRolling();
-            camera.current.x = Math.max(0, Math.min(spawn.x - CANVAS_WIDTH / 2, levelData.current.width - CANVAS_WIDTH));
+            
+            // Use current canvas dimensions for camera centering
+            const w = canvasSizeRef.current.width;
+            camera.current.x = Math.max(0, Math.min(spawn.x - w / 2, levelData.current.width - w));
         }
         
         setIsBuildMode(false);
@@ -518,16 +559,18 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
     const updateViewModeCamera = () => {
         const speed = 10;
         const keys = keysPressed.current;
+        const width = canvasSizeRef.current.width;
         if (keys.has(InputKeys.A) || keys.has(InputKeys.ARROW_LEFT)) viewCamera.current.x -= speed;
         if (keys.has(InputKeys.D) || keys.has(InputKeys.ARROW_RIGHT)) viewCamera.current.x += speed;
 
-        viewCamera.current.x = Math.max(0, Math.min(viewCamera.current.x, levelData.current.width - CANVAS_WIDTH));
+        viewCamera.current.x = Math.max(0, Math.min(viewCamera.current.x, levelData.current.width - width));
     };
 
     const updateIntroLogic = () => {
         const speed = 15;
         const groundY = 14 * TILE_SIZE; 
         const diceSize = TILE_SIZE * 2;
+        const width = canvasSizeRef.current.width;
         
         introState.current.x += speed;
         introState.current.rotation += 0.2;
@@ -568,8 +611,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
             }
         });
 
-        camera.current.x = introState.current.x - CANVAS_WIDTH / 2;
-        camera.current.x = Math.max(0, Math.min(camera.current.x, levelData.current.width - CANVAS_WIDTH));
+        camera.current.x = introState.current.x - width / 2;
+        camera.current.x = Math.max(0, Math.min(camera.current.x, levelData.current.width - width));
 
         // Stop Intro Logic
         // Ensure dice goes past level width to trigger visibility for all (safeguard)
@@ -736,7 +779,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
         else if (Math.abs(p.vx) > 0) p.state = 'running';
         else p.state = 'idle';
 
-        if (p.y > CANVAS_HEIGHT + 200) {
+        if (p.y > canvasSizeRef.current.height + 200) {
             handleLifeLost();
         }
 
@@ -793,7 +836,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                 
                 if (e.falling) {
                     e.y += 10; // Fast fall
-                    if (e.y > CANVAS_HEIGHT) {
+                    if (e.y > canvasSizeRef.current.height) {
                         entities.splice(i, 1);
                         continue;
                     }
@@ -894,7 +937,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                              }
                         }
                     }
-                    if (e.y > CANVAS_HEIGHT + 100) entities.splice(i, 1); // remove if fell out
+                    if (e.y > canvasSizeRef.current.height + 100) entities.splice(i, 1); // remove if fell out
                 }
             }
 
@@ -1019,15 +1062,38 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
     };
 
     const updateCamera = () => {
-        // On mobile/touch devices, we want the player to appear higher on the screen 
-        // to leave room for the controls at the bottom.
-        const offsetY = isTouchDeviceRef.current ? CANVAS_HEIGHT / 2.2 : CANVAS_HEIGHT / 1.5;
+        const { width, height } = canvasSizeRef.current;
+        const isPortrait = height > width;
         
-        let targetX = player.current.x - CANVAS_WIDTH / 2;
-        targetX = Math.max(0, Math.min(targetX, levelData.current.width - CANVAS_WIDTH));
+        // Calculate Camera Y Offset
+        // Larger offset = Camera looks higher up = Player appears lower on screen
+        // Smaller offset = Camera looks lower down = Player appears higher on screen
+        let offsetY;
+        if (isTouchDeviceRef.current) {
+            if (isPortrait) {
+                // Portrait: Player higher up (ground lower) -> Smaller offset
+                offsetY = height / 1.6; 
+            } else {
+                // Landscape: Player standard high for controls -> Medium offset
+                offsetY = height / 2.2;
+            }
+        } else {
+            // Desktop: Player lower (standard platformer view) -> Large offset
+            offsetY = height / 1.5;
+        }
         
-        let targetY = player.current.y - offsetY;
-        targetY = Math.max(0, Math.min(targetY, levelData.current.height - CANVAS_HEIGHT)); 
+        let targetX = player.current.x - width / 2;
+        targetX = Math.max(0, Math.min(targetX, levelData.current.width - width));
+        
+        // Prevent camera shaking when ducking
+        // Use the standing Y position even if ducking
+        let trackY = player.current.y;
+        if (player.current.isDucking) {
+            trackY -= (PLAYER_HEIGHT - DUCK_HEIGHT);
+        }
+
+        let targetY = trackY - offsetY;
+        targetY = Math.max(0, Math.min(targetY, levelData.current.height - height)); 
         
         camera.current.x += (targetX - camera.current.x) * 0.1;
         camera.current.y += (targetY - camera.current.y) * 0.1;
@@ -1070,15 +1136,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
             const activeCam = introState.current.active 
                 ? camera.current 
                 : viewModeRef.current ? viewCamera.current : camera.current;
-                    
+            
+            const { width, height } = canvasSizeRef.current;
+            
             if (!viewModeRef.current && !introState.current.active) updateCamera();
 
             ctx.fillStyle = COLORS.background;
-            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            ctx.fillRect(0, 0, width, height);
             
             const entities = levelData.current.entities;
             const visibleEntities = entities.filter(e => 
-                e.x + e.width > activeCam.x && e.x < activeCam.x + CANVAS_WIDTH
+                e.x + e.width > activeCam.x && e.x < activeCam.x + width
             );
 
             visibleEntities.forEach(e => {
@@ -1172,8 +1240,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
         <div className="fixed inset-0 w-full h-full bg-black flex items-center justify-center overflow-hidden touch-none">
             <canvas 
                 ref={canvasRef}
-                width={CANVAS_WIDTH} 
-                height={CANVAS_HEIGHT}
+                width={canvasSize.width} 
+                height={canvasSize.height}
                 className="block max-w-full max-h-full object-contain"
             />
             

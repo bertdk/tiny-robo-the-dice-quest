@@ -168,7 +168,9 @@ const createTVStand = (x: number, y: number): Entity[] => {
 
 export const createLevel = (levelIndex: number): LevelData => {
   const groundY = 14; 
-  const bottomTileY = Math.ceil(CANVAS_HEIGHT / TILE_SIZE) + 5; // Ensure extra padding below canvas
+  // Increase bottom padding to cover potential tall screens (Portrait Mode)
+  // 50 tiles * 40px = 2000px depth, enough for any phone aspect ratio
+  const bottomTileY = 50; 
   
   const entities: Entity[] = [];
   const checkpoints: Point[] = [];
@@ -504,7 +506,7 @@ export const createLevel = (levelIndex: number): LevelData => {
   // --- Boundaries ---
   add(generateRect(-1, 0, 1, 50, '#000')); // Left Wall
   add(generateRect(levelWidth, 0, 1, 50, '#000')); // Right Wall
-  add(generateRect(0, 25, levelWidth, 2, '#000')); // Kill floor
+  add(generateRect(0, 50, levelWidth, 2, '#000')); // Kill floor
   
   // Ceiling
   add(generateRect(0, -1, levelWidth, 1, '#2c3e50')); // Ceiling prevents jumping out
@@ -513,7 +515,7 @@ export const createLevel = (levelIndex: number): LevelData => {
     id: levelIndex,
     name: `Level ${levelIndex}`,
     width: levelWidth * TILE_SIZE,
-    height: CANVAS_HEIGHT, 
+    height: 2000, // Ensure world is deep enough for vertical scrolling
     entities,
     spawnPoint,
     checkpoints,
