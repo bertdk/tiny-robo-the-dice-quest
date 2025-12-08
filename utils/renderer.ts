@@ -1,3 +1,4 @@
+
 import { Entity, EntityType, PlayerState, Camera, BuildState, FlyingFace, PowerUpType, BlockType } from '../types';
 import { TILE_SIZE, PLAYER_WIDTH, PLAYER_HEIGHT, DUCK_HEIGHT, COLORS, BLOCK_COLORS } from '../constants';
 
@@ -6,6 +7,58 @@ export const drawRect = (ctx: CanvasRenderingContext2D, camera: Camera, x: numbe
   ctx.fillRect(x - camera.x, y - camera.y, w, h);
 };
 
+export const drawMovingPlatform = (ctx: CanvasRenderingContext2D, camera: Camera, platform: Entity) => {
+    const x = platform.x - camera.x;
+    const y = platform.y - camera.y;
+    const w = platform.width;
+    const h = platform.height;
+
+    // Metallic Base
+    ctx.fillStyle = COLORS.platforms.moving;
+    ctx.fillRect(x, y, w, h);
+    
+    // Border
+    ctx.strokeStyle = '#5f6a6a';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, w, h);
+    
+    // Rivets
+    ctx.fillStyle = '#34495e';
+    const rivetSize = 3;
+    ctx.beginPath();
+    ctx.arc(x + 5, y + 5, rivetSize, 0, Math.PI*2);
+    ctx.arc(x + w - 5, y + 5, rivetSize, 0, Math.PI*2);
+    ctx.arc(x + 5, y + h - 5, rivetSize, 0, Math.PI*2);
+    ctx.arc(x + w - 5, y + h - 5, rivetSize, 0, Math.PI*2);
+    ctx.fill();
+
+    // Directional Arrows
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    const centerX = x + w / 2;
+    const centerY = y + h / 2;
+    
+    ctx.beginPath();
+    if (platform.axis === 'y') {
+        // Up/Down Arrows
+        ctx.moveTo(centerX, centerY - 10);
+        ctx.lineTo(centerX - 5, centerY - 5);
+        ctx.lineTo(centerX + 5, centerY - 5);
+        
+        ctx.moveTo(centerX, centerY + 10);
+        ctx.lineTo(centerX - 5, centerY + 5);
+        ctx.lineTo(centerX + 5, centerY + 5);
+    } else {
+        // Left/Right Arrows
+        ctx.moveTo(centerX - 10, centerY);
+        ctx.lineTo(centerX - 5, centerY - 5);
+        ctx.lineTo(centerX - 5, centerY + 5);
+        
+        ctx.moveTo(centerX + 10, centerY);
+        ctx.lineTo(centerX + 5, centerY - 5);
+        ctx.lineTo(centerX + 5, centerY + 5);
+    }
+    ctx.fill();
+};
 
 export const drawProjectile = (ctx: CanvasRenderingContext2D, camera: Camera, projectile: Entity) => {
     const x = projectile.x - camera.x;
@@ -22,17 +75,35 @@ export const drawProjectile = (ctx: CanvasRenderingContext2D, camera: Camera, pr
 };
 
 export const drawSpike = (ctx: CanvasRenderingContext2D, camera: Camera, spike: Entity) => {
-    const x = spike.x - camera.x;
-    const y = spike.y - camera.y;
+    let x = spike.x - camera.x;
+    let y = spike.y - camera.y;
     const w = spike.width;
     const h = spike.height;
+    
+    // Jitter if falling spike triggered
+    if (spike.triggered && !spike.falling) {
+        x += Math.random() * 2 - 1;
+        y += Math.random() * 2 - 1;
+    }
 
-    ctx.fillStyle = '#7f8c8d'; 
+    // Flash Red if triggered
+    ctx.fillStyle = (spike.triggered && !spike.falling) ? '#e74c3c' : '#7f8c8d'; 
     ctx.beginPath();
-    ctx.moveTo(x, y + h);
-    ctx.moveTo(x + w / 2, y); 
-    ctx.lineTo(x + w, y + h);
-    ctx.lineTo(x, y + h);
+    
+    if (spike.type === EntityType.FALLING_SPIKE) {
+        // Pointing Down
+        ctx.moveTo(x, y);
+        ctx.moveTo(x + w / 2, y + h); 
+        ctx.lineTo(x + w, y);
+        ctx.lineTo(x, y);
+    } else {
+        // Pointing Up
+        ctx.moveTo(x, y + h);
+        ctx.moveTo(x + w / 2, y); 
+        ctx.lineTo(x + w, y + h);
+        ctx.lineTo(x, y + h);
+    }
+    
     ctx.fill();
     ctx.strokeStyle = '#333';
     ctx.stroke();
@@ -327,133 +398,110 @@ export const drawRobot = (ctx: CanvasRenderingContext2D, camera: Camera, player:
   
   // --- Eyes (Visor) ---
   ctx.fillStyle = player.state === 'dead' ? '#e74c3c' : '#3498db'; // Red eyes when dead
-  ctx.fillRect(-w/2 + 6, -h/2 + 8, w - 8, 8);
-  
-  if (player.state !== 'dead' && Math.floor(Date.now() / 200) % 2 === 0) {
-      ctx.fillStyle = '#eaf2f8'; 
-      ctx.fillRect(-w/2 + 8, -h/2 + 10, 4, 4);
-  }
+  ctx.fillRect(-w/2 + 6, -h/2 + 6, w - 12, 6);
 
-  // --- Limbs (Animation) ---
-  const time = Date.now() / 100;
-  let legOffset = 0;
-  
-  if (player.state === 'running') {
-    legOffset = Math.sin(time * 2) * 6;
-  }
-
-  // Legs / Boots
-  if (!player.isDucking) {
-      if (activePowerUp === PowerUpType.GRAVITY_BOOTS) {
-           ctx.fillStyle = '#8e44ad'; // Purple boots
-      } else if (activePowerUp === PowerUpType.PHASE) {
-           ctx.fillStyle = '#e67e22'; // Orange shoes (shared visual with dash)
-      } else {
-           ctx.fillStyle = '#7f8c8d';
-      }
-      ctx.fillRect(-w/2 + 2 - legOffset, h/2 - 4, 8, 6);
-      ctx.fillRect(w/2 - 10 + legOffset, h/2 - 4, 8, 6);
-  } else {
-      ctx.fillStyle = '#7f8c8d';
-      ctx.fillRect(-w/2, h/2 - 4, w, 4);
-  }
-
-  // --- Arms / Special Skill ---
-  if (player.buildMode && player.state !== 'dead') {
-      ctx.fillStyle = '#f1c40f'; 
-      ctx.fillRect(0, 0, 16, 6); 
-      
-      ctx.fillStyle = COLORS.platforms.block;
-      ctx.fillRect(14, -6, 12, 12); 
-      ctx.strokeStyle = '#fff';
-      ctx.strokeRect(14, -6, 12, 12);
-  } else {
-      ctx.fillStyle = '#7f8c8d';
-      const armSwing = player.state === 'running' ? Math.cos(time * 2) * 8 : 0;
-      ctx.fillRect(-4, 0 + armSwing, 6, 14);
-      
-      // Laser Gun visible?
-      if (activePowerUp === PowerUpType.LASER) {
-          ctx.fillStyle = '#e74c3c';
-          ctx.fillRect(0, 4 + armSwing, 12, 4);
-      }
-  }
-  
-  // Phase Effect
-  if (player.phaseActiveUntil > Date.now()) {
-      ctx.globalAlpha = 0.5;
-  }
-  
-  // Antennas
+  // --- Antenna ---
   ctx.beginPath();
   ctx.moveTo(0, -h/2);
-  ctx.lineTo(0, -h/2 - 8);
-  ctx.strokeStyle = '#2c3e50';
+  ctx.lineTo(0, -h/2 - 6);
+  ctx.strokeStyle = '#2c3e50'; 
   ctx.stroke();
-  ctx.fillStyle = player.state === 'dead' ? '#000' : 'red';
   ctx.beginPath();
-  ctx.arc(0, -h/2 - 8, 3, 0, Math.PI * 2);
+  ctx.arc(0, -h/2 - 6, 2, 0, Math.PI * 2);
+  ctx.fillStyle = '#e74c3c'; 
   ctx.fill();
+
+  // --- Boots/Legs ---
+  // If Gravity Boots active, show visual
+  const bootColor = activePowerUp === PowerUpType.GRAVITY_BOOTS ? '#9b59b6' : (activePowerUp === PowerUpType.PHASE ? '#e67e22' : '#2c3e50');
+  ctx.fillStyle = bootColor;
+  
+  if (player.state === 'running') {
+      const time = Date.now() / 100;
+      // Animate legs
+      const legOffset = Math.sin(time * 2) * 4;
+      ctx.fillRect(-w/2 + 4, h/2 - 4 + legOffset, 6, 4);
+      ctx.fillRect(w/2 - 10, h/2 - 4 - legOffset, 6, 4);
+  } else {
+      ctx.fillRect(-w/2 + 4, h/2 - 4, 6, 4);
+      ctx.fillRect(w/2 - 10, h/2 - 4, 6, 4);
+  }
+
+  // --- Arms (holding block if build mode) ---
+  ctx.fillStyle = '#7f8c8d'; 
+  if (player.buildMode && player.state !== 'dead') {
+      // Arm raised holding block
+      ctx.fillRect(4, -4, 12, 4);
+      // Tiny block in hand
+      ctx.fillStyle = '#f1c40f';
+      ctx.fillRect(16, -8, 8, 8);
+  } else {
+      // Arm down
+      ctx.fillRect(-4, 4, 4, 12);
+  }
+
+  // --- Weapon / Phase visual ---
+  if (activePowerUp === PowerUpType.LASER && !player.buildMode && player.state !== 'dead') {
+       // Draw Gun
+       ctx.fillStyle = '#2c3e50';
+       ctx.fillRect(w/2 - 2, 0, 10, 4);
+       ctx.fillRect(w/2 - 2, 0, 2, 6);
+       ctx.fillStyle = '#e74c3c';
+       ctx.fillRect(w/2 + 6, 1, 2, 2);
+  }
 
   ctx.restore();
 
-  // --- Build Preview Indicator (Non-Snapped) ---
-  if (player.buildMode && player.state !== 'dead') {
-     const GAP = 2;
-     
-     // Defaults to square if not provided
-     const buildWidth = ghostBlockConfig?.width || TILE_SIZE;
-     const buildHeight = ghostBlockConfig?.height || TILE_SIZE;
-     const buildColor = ghostBlockConfig?.color || 'rgba(241, 196, 15, 0.3)';
-
-     let buildX: number;
-     let buildY: number;
-
-     if (player.facingRight) {
-        buildX = player.x + player.width + GAP;
-     } else {
-        buildX = player.x - buildWidth - GAP;
-     }
-
-     if (player.isDucking) {
-         buildY = player.y + player.height; // Step down
-     } else {
-         buildY = player.y + player.height - buildHeight; // Floor extension
-     }
-
-     ctx.save();
-     
-     if (buildState === 'valid') {
-         ctx.strokeStyle = buildColor.replace('0.3', '0.8'); // Darker border
-         ctx.fillStyle = buildColor;
-     } else if (buildState === 'deconstruct') {
-         ctx.strokeStyle = COLORS.ui.deconstruct;
-         ctx.fillStyle = 'rgba(52, 152, 219, 0.3)';
-     } else {
-         ctx.strokeStyle = 'rgba(231, 76, 60, 0.8)'; // Red
-         ctx.fillStyle = 'rgba(231, 76, 60, 0.3)';
-     }
-     
-     ctx.lineWidth = 3;
-     ctx.setLineDash([4, 4]);
-     ctx.strokeRect(buildX - camera.x, buildY - camera.y, buildWidth, buildHeight);
-     
-     // Fill
-     ctx.fillRect(buildX - camera.x, buildY - camera.y, buildWidth, buildHeight);
-
-     // Draw 'X' for deconstruct
-     if (buildState === 'deconstruct') {
-        const bx = buildX - camera.x;
-        const by = buildY - camera.y;
-        ctx.beginPath();
-        ctx.moveTo(bx, by);
-        ctx.lineTo(bx + buildWidth, by + buildHeight);
-        ctx.moveTo(bx + buildWidth, by);
-        ctx.lineTo(bx, by + buildHeight);
-        ctx.lineWidth = 2;
-        ctx.stroke();
-     }
-     
-     ctx.restore();
+  // --- GHOST BLOCK PREVIEW ---
+  // Draw this in world space, not player local space
+  if (player.buildMode && player.state !== 'dead' && ghostBlockConfig) {
+      const { width, height, color } = ghostBlockConfig;
+      
+      const GAP = 2;
+      let buildX;
+      if (player.facingRight) {
+          buildX = x + w + GAP;
+      } else {
+          buildX = x - width - GAP;
+      }
+      
+      let buildY;
+      if (player.isDucking) {
+           buildY = y + h;
+      } else {
+           buildY = y + h - height;
+      }
+      
+      ctx.save();
+      
+      // Deconstruct State
+      if (buildState === 'deconstruct') {
+          ctx.fillStyle = COLORS.ui.deconstruct;
+          ctx.fillRect(buildX, buildY, width, height);
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 4]);
+          ctx.strokeRect(buildX, buildY, width, height);
+          
+          // X mark
+          ctx.beginPath();
+          ctx.moveTo(buildX, buildY);
+          ctx.lineTo(buildX + width, buildY + height);
+          ctx.moveTo(buildX + width, buildY);
+          ctx.lineTo(buildX, buildY + height);
+          ctx.strokeStyle = '#c0392b';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+      } else {
+          // Valid/Invalid State
+          ctx.fillStyle = color;
+          ctx.fillRect(buildX, buildY, width, height);
+          ctx.strokeStyle = buildState === 'valid' ? '#f1c40f' : '#e74c3c';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 4]);
+          ctx.strokeRect(buildX, buildY, width, height);
+      }
+      
+      ctx.restore();
   }
 };

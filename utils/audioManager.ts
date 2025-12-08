@@ -190,6 +190,26 @@ export class AudioManager {
         osc.stop(t + 0.6);
         vibrato.stop(t + 0.6);
     }
+
+    playTrapTrigger() {
+        if (!this.ctx || this.isMuted) return;
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        // Mechanical latch sound (short, low square wave)
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(150, t);
+        osc.frequency.exponentialRampToValueAtTime(50, t + 0.1);
+
+        gain.gain.setValueAtTime(0.2, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+
+        osc.connect(gain);
+        gain.connect(this.masterGain!);
+        osc.start(t);
+        osc.stop(t + 0.1);
+    }
     
     playRolling() {
         if (!this.ctx || this.isMuted || this.rollingSource) return;

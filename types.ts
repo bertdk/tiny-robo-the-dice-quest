@@ -17,7 +17,9 @@ export enum EntityType {
   CHECKPOINT,
   BUILT_BLOCK,
   LAMP,
-  PROJECTILE
+  PROJECTILE,
+  MOVING_PLATFORM,
+  FALLING_SPIKE
 }
 
 export enum BlockType {
@@ -50,9 +52,19 @@ export interface Entity {
   properties?: any; // For flexible data (e.g. checkpoint index)
   visible?: boolean; // For intro reveal logic
   
+  // Moving Platform Physics
+  patrolMin?: number;
+  patrolMax?: number;
+  axis?: 'x' | 'y';
+  
   // New Block Physics
   falling?: boolean;
   expiresAt?: number;
+
+  // Falling Spike Logic
+  triggered?: boolean;
+  triggerTime?: number;
+  originalY?: number;
 }
 
 export interface PlayerState extends Entity {
@@ -82,6 +94,7 @@ export interface LevelData {
   entities: Entity[];
   spawnPoint: Point;
   checkpoints: Point[]; // Locations of the 6 checkpoints (last is finish)
+  timeLimit?: number; // Optional time limit in seconds
 }
 
 export interface Camera {

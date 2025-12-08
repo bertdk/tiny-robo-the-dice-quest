@@ -17,7 +17,7 @@ export const PLAYER_WIDTH = 30;
 export const PLAYER_HEIGHT = 48;
 export const DUCK_HEIGHT = 24;
 
-export const MAX_LEVELS = 3;
+export const MAX_LEVELS = 6;
 export const CHECKPOINTS_PER_LEVEL = 6;
 
 // Powerup Constants
@@ -25,6 +25,9 @@ export const LASER_SPEED = 12;
 export const PHASE_DURATION = 150; // ms
 export const SPEED_BOOST_MULTIPLIER = 1.5;
 export const GRAVITY_BOOTS_MULTIPLIER = 0.5;
+
+// Moving Platform Constants
+export const MOVING_PLATFORM_SPEED = 2;
 
 export enum InputKeys {
   W = 'w',
@@ -48,7 +51,8 @@ export const COLORS = {
     wood: '#8b4513',
     darkWood: '#5d4037',
     block: '#95a5a6',
-    floor: '#d7ccc8'
+    floor: '#d7ccc8',
+    moving: '#7f8c8d' // Metallic for moving platforms
   },
   furniture: {
     sofaRed: '#c0392b',

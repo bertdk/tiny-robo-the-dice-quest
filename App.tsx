@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import GameCanvas from './components/GameCanvas';
 import Dice from './components/Dice';
 import { Trophy, Skull, Lock, ArrowRight } from 'lucide-react';
 import { BlockType, PowerUpType } from './types';
-import { DICE_BLOCK_OPTIONS, DICE_POWERUP_OPTIONS } from './constants';
+import { DICE_BLOCK_OPTIONS, DICE_POWERUP_OPTIONS, MAX_LEVELS } from './constants';
 
 interface LevelProgress {
   [levelId: number]: {
@@ -44,16 +43,30 @@ const App: React.FC = () => {
         const parsed = JSON.parse(savedProgress) as LevelProgress;
         setProgress(parsed);
         let maxUnlocked = 1;
-        for (let i = 1; i <= 3; i++) {
+        // Check up to MAX_LEVELS - 1 to see what should be unlocked
+        for (let i = 1; i < MAX_LEVELS; i++) {
            if (parsed[i]?.completedAt) {
                maxUnlocked = Math.max(maxUnlocked, i + 1);
            }
         }
-        setUnlockedLevels(Math.min(maxUnlocked, 3));
+        setUnlockedLevels(Math.min(maxUnlocked, MAX_LEVELS));
       }
     } catch (e) {
       console.error("Failed to load progress", e);
     }
+  }, []);
+
+  // Expose Unlock Tool
+  useEffect(() => {
+      (window as any).unlockLevels = (n: number, pass: string) => {
+          if (pass === 'robo') {
+              setUnlockedLevels(Math.min(n, MAX_LEVELS));
+              console.log(`Unlocked ${n} levels`);
+          } else {
+              console.log('Access Denied');
+          }
+      };
+      (window as any).unlockLevels(1000, "robo");
   }, []);
 
   const saveProgress = (newProgress: LevelProgress) => {
@@ -86,12 +99,12 @@ const App: React.FC = () => {
     saveProgress(newProgress);
 
     const nextLevel = selectedLevel + 1;
-    if (nextLevel <= 3 && nextLevel > unlockedLevels) {
+    if (nextLevel <= MAX_LEVELS && nextLevel > unlockedLevels) {
       setUnlockedLevels(nextLevel);
     }
     
     // Go to Re-roll screen if there is a next level, otherwise simple Win screen
-    if (nextLevel <= 3) {
+    if (nextLevel <= MAX_LEVELS) {
         setGameState('reroll');
     } else {
         setGameState('win'); // Game fully beat
@@ -150,8 +163,8 @@ const App: React.FC = () => {
 
              <div className={`transition-opacity duration-500 ${diceRolled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
                  <h3 className="text-white text-xl mb-4 font-bold">SELECT LEVEL</h3>
-                 <div className="flex justify-center gap-4 mb-8">
-                    {[1, 2, 3].map((level) => (
+                 <div className="flex justify-center flex-wrap gap-4 mb-8">
+                    {Array.from({ length: MAX_LEVELS }, (_, i) => i + 1).map((level) => (
                       <button
                         key={level}
                         disabled={level > unlockedLevels}
@@ -163,7 +176,6 @@ const App: React.FC = () => {
                           }`}
                       >
                         {level > unlockedLevels ? <Lock size={24} /> : level}
-                        {/* Difficulty labels removed as requested */}
                         {progress[level]?.completedAt && <span className="text-[10px] text-green-300 mt-1">✔ DONE</span>}
                       </button>
                     ))}
