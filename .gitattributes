@@ -1,0 +1,8 @@
+# Always keep the version of these files from the current branch during a merge.
+# This prevents vendor changes from being applied.
+.gitignore merge=ours
+index.html merge=ours
+package.json merge=ours
+pnpm-lock.yaml merge=ours
+thumbnail.png merge=ours
+vite.config.ts merge=ours
