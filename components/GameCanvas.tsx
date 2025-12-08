@@ -13,7 +13,7 @@ import {
 import { createLevel } from '../utils/levelGenerator';
 import { drawRect, drawRobot, drawSpike, drawSpider, drawCheckpoint, drawLamp, drawIntroDice, drawFlyingFace, drawProjectile, drawBuiltBlock } from '../utils/renderer';
 import { audioManager } from '../utils/audioManager';
-import { Heart, Pause, Play, Eye, Map, Volume2, Home } from 'lucide-react';
+import { Heart, Pause, Play, Eye, Map, Volume2, VolumeX, Home } from 'lucide-react';
 
 interface GameCanvasProps {
     startLevel: number;
@@ -80,6 +80,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
     const [isPaused, setIsPaused] = useState(false);
     const [viewMode, setViewMode] = useState(false);
     const [volume, setVolume] = useState(audioManager.getVolume());
+    const [isMuted, setIsMuted] = useState(audioManager.isAudioMuted());
     const [isBuildMode, setIsBuildMode] = useState(false); // UI State
     const [isIntroActive, setIsIntroActive] = useState(true); // State to trigger re-renders for UI
 
@@ -203,6 +204,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
         const val = parseFloat(e.target.value);
         setVolume(val);
         audioManager.setVolume(val);
+    };
+
+    const handleMuteToggle = () => {
+        const newState = !isMuted;
+        setIsMuted(newState);
+        audioManager.toggleMute(newState);
     };
 
     const skipIntro = () => {
@@ -575,6 +582,16 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
 
         // --- Integration & Collision ---
         p.x += p.vx;
+
+        // Level Boundaries (Clamp)
+        if (p.x < 0) {
+            p.x = 0;
+            p.vx = 0;
+        } else if (p.x + p.width > levelData.current.width) {
+            p.x = levelData.current.width - p.width;
+            p.vx = 0;
+        }
+
         resolveEnvironmentCollisions(p, 'x');
 
         p.y += p.vy;
@@ -1008,15 +1025,23 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                                 <label className="text-gray-300 flex items-center gap-2 mb-2 text-sm font-bold">
                                     <Volume2 size={16} /> SOUND VOLUME
                                 </label>
-                                <input 
-                                    type="range" 
-                                    min="0" 
-                                    max="1" 
-                                    step="0.1" 
-                                    value={volume}
-                                    onChange={handleVolumeChange}
-                                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                                />
+                                <div className="flex items-center gap-4">
+                                    <button 
+                                        onClick={handleMuteToggle}
+                                        className="text-white bg-gray-700 p-2 rounded-lg hover:bg-gray-600 transition-colors"
+                                    >
+                                        {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                                    </button>
+                                    <input 
+                                        type="range" 
+                                        min="0" 
+                                        max="1" 
+                                        step="0.1" 
+                                        value={volume}
+                                        onChange={handleVolumeChange}
+                                        className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500 flex-1"
+                                    />
+                                </div>
                             </div>
 
                             <button 

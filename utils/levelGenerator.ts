@@ -159,7 +159,7 @@ export const createLevel = (levelIndex: number): LevelData => {
 
   if (levelIndex === 1) {
      // --- LEVEL 1: EASY (Movement Basics) ---
-     levelWidth = 150; // Extended length
+     levelWidth = 120; // Extended length
      
      addFloor(0, 15);
      // Sofa: Leg(1) + Seat(2) + Back(3) = 6 high. Top of back is y - 6.
@@ -203,13 +203,13 @@ export const createLevel = (levelIndex: number): LevelData => {
      add(createTable(92, groundY, 4));
      add(generateHangingLamp(94, 6)); // Lamp blocking jump
 
-     addFloor(99, 20);
+     addFloor(99, 21);
      add(createSofa(105, groundY, 4, COLORS.furniture.sofaRed));
      addCheckpoint(6, 115, groundY); // Finish on floor
 
   } else if (levelIndex === 2) {
       // --- LEVEL 2: MEDIUM (Building & Hazards) ---
-      levelWidth = 180;
+      levelWidth = 145;
 
       // Ensure floor is continuous under walls/objects
       addFloor(0, 22); 
@@ -270,7 +270,7 @@ export const createLevel = (levelIndex: number): LevelData => {
 
   } else {
       // --- LEVEL 3: EXTREME (Precision & Complexity) ---
-      levelWidth = 220;
+      levelWidth = 185;
 
       addFloor(0, 8);
       
