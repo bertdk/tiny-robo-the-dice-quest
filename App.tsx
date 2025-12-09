@@ -133,21 +133,21 @@ const App: React.FC = () => {
       {/* Updated: Always show header even on landscape mobile but smaller */}
       {gameState !== 'playing' && (
           <header className="mb-2 md:mb-4 text-center mt-2 md:mt-0 p-2 md:p-4 pb-0 shrink-0 landscape:mb-0 landscape:p-1">
-            <h1 className="text-xl md:text-5xl landscape:text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 mb-1 md:mb-2 font-['Press_Start_2P']">
+            <h1 className="text-xl landscape:text-xl md:text-5xl md:landscape:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 mb-1 md:mb-2 font-['Press_Start_2P']">
               TINY ROBO: THE DICE QUEST
             </h1>
             <p className="text-gray-400 text-[10px] md:text-base landscape:hidden">Find the dice to escape the living room!</p>
           </header>
       )}
 
-      <main className={`flex flex-col items-center justify-center flex-1 min-h-0 w-full ${gameState === 'playing' ? '' : 'max-w-5xl'}`}>
+      <main className={`flex flex-col items-center justify-center flex-1 min-h-0 w-full ${gameState === 'playing' ? '' : 'max-w-7xl'}`}>
         {gameState === 'start' && (
-          <div className="bg-gray-800 p-4 md:p-10 rounded-none md:rounded-xl shadow-2xl text-center border-0 md:border-2 border-gray-700 w-full max-w-5xl h-full md:h-auto max-h-full flex flex-col justify-center overflow-y-auto custom-scrollbar landscape:overflow-hidden landscape:justify-start">
+          <div className="bg-gray-800 p-4 md:p-10 rounded-none md:rounded-xl shadow-2xl text-center border-0 md:border-2 border-gray-700 w-full max-w-7xl h-full md:h-auto max-h-full flex flex-col justify-center overflow-y-auto custom-scrollbar landscape:overflow-hidden landscape:justify-start">
              
              {/* Dice Section */}
-             <div className="bg-gray-900 p-6 md:p-10 rounded-lg mb-6 md:mb-10 border border-gray-700 mx-0 md:mx-0 shrink-0 landscape:mb-1 landscape:p-2 landscape:py-4">
+             <div className="bg-gray-900 p-6 landscape:p-2 md:landscape:p-12 lg:landscape:p-16 rounded-lg mb-6 landscape:mb-1 md:landscape:mb-8 border border-gray-700 mx-0 md:mx-0 shrink-0">
                  <h2 className="text-white font-bold mb-4 md:mb-8 text-sm md:text-2xl landscape:hidden">SETUP YOUR LOADOUT</h2>
-                 <div className="flex justify-evenly gap-8 md:gap-48 items-center landscape:gap-16">
+                 <div className="flex justify-evenly gap-8 landscape:gap-16 md:landscape:gap-48 items-center">
                      <Dice 
                         label="BLOCK TYPE" 
                         options={DICE_BLOCK_OPTIONS} 
