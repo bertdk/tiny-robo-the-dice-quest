@@ -231,10 +231,10 @@ const App: React.FC = () => {
                  <div className="flex-shrink-0 mt-2 md:mt-0 landscape:mt-1">
                     <Trophy className="w-8 h-8 md:w-16 md:h-16 text-yellow-400 mx-auto mb-1 md:mb-4 landscape:w-6 landscape:h-6" />
                     <h2 className="text-lg md:text-3xl text-white mb-1 md:mb-2 font-bold landscape:text-base">LEVEL COMPLETE!</h2>
-                    <p className="text-gray-300 mb-2 md:mb-8 text-xs md:text-base px-4 landscape:mb-1 landscape:hidden">Choose one dice to re-roll for the next level, or keep your setup.</p>
+                    <p className="text-gray-300 mb-2 md:mb-8 text-xs md:text-base px-4 landscape:mb-2 landscape:text-[10px] landscape:leading-tight block">Choose one dice to re-roll for the next level, or keep your setup.</p>
                  </div>
                  
-                 <div className="bg-gray-900 p-2 md:p-4 rounded-lg mb-2 md:mb-4 flex flex-row justify-center gap-4 md:gap-12 mx-2 md:mx-0 flex-1 items-center shrink-0 landscape:p-2 landscape:mb-1 landscape:gap-8">
+                 <div className="bg-gray-900 p-2 md:p-4 rounded-lg mb-2 md:mb-4 flex flex-row justify-center gap-4 md:gap-12 mx-2 md:mx-0 items-center shrink-0 landscape:p-2 landscape:mb-2 landscape:gap-8 h-auto">
                      <div className="flex flex-col items-center">
                          <span className="text-white text-[10px] md:text-xs mb-1 md:mb-2">{blockType}</span>
                          <Dice 
