@@ -69,6 +69,7 @@ export interface Entity {
 
 export interface PlayerState extends Entity {
   isGrounded: boolean;
+  lastGroundedTime: number; // For Coyote Time
   isDucking: boolean;
   facingRight: boolean;
   buildMode: boolean;

@@ -1,10 +1,12 @@
 
 import { BlockType, PowerUpType } from './types';
-import { Square, BoxSelect, ArrowUpToLine, MoveHorizontal, Clock, RefreshCcw, ChevronsUp, Crosshair, Feather, Zap, Heart, Ghost } from 'lucide-react';
+import { Square, BoxSelect, ArrowUpToLine, MoveHorizontal, Clock, RefreshCcw, ChevronsUp, Crosshair, Feather, Ghost, Heart } from 'lucide-react';
 
 export const TILE_SIZE = 40;
-export const GRAVITY = 0.6; // Slightly heavier for better feel
+export const GRAVITY = 0.6; // Base gravity
+export const FALL_GRAVITY_MULTIPLIER = 2.0; // Multiplier when falling for snappier feel
 export const JUMP_FORCE = -13; // Stronger jump to clear furniture
+export const COYOTE_TIME_MS = 100; // Time in ms to allow jumping after leaving ledge
 export const MOVE_SPEED = 4; // Snappy movement
 export const MAX_FALL_SPEED = 15;
 export const CANVAS_WIDTH = 1024;
