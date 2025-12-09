@@ -1,6 +1,7 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { 
-    CANVAS_WIDTH as DEFAULT_CANVAS_WIDTH, CANVAS_HEIGHT as DEFAULT_CANVAS_HEIGHT, TILE_SIZE, GRAVITY, JUMP_FORCE, MOVE_SPEED, 
+    CANVAS_WIDTH as DEFAULT_CANVAS_WIDTH, CANVAS_HEIGHT as DEFAULT_CANVAS_HEIGHT, TILE_SIZE, GRAVITY, FALL_GRAVITY_MULTIPLIER, JUMP_FORCE, COYOTE_TIME_MS, MOVE_SPEED, 
     InputKeys, PLAYER_WIDTH, PLAYER_HEIGHT, DUCK_HEIGHT, MAX_FALL_SPEED, COLORS,
     MS_PER_UPDATE, LASER_SPEED, PHASE_DURATION, SPEED_BOOST_MULTIPLIER, GRAVITY_BOOTS_MULTIPLIER,
     DICE_BLOCK_OPTIONS, BLOCK_COLORS, DICE_POWERUP_OPTIONS
@@ -12,7 +13,7 @@ import {
 import { createLevel } from '../utils/levelGenerator';
 import { drawRect, drawRobot, drawSpike, drawSpider, drawCheckpoint, drawLamp, drawIntroDice, drawFlyingFace, drawProjectile, drawBuiltBlock, drawMovingPlatform } from '../utils/renderer';
 import { audioManager } from '../utils/audioManager';
-import { Heart, Pause, Play, Eye, Map, Volume2, VolumeX, Home, Clock, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Crosshair, Hammer, Zap, SkipForward } from 'lucide-react';
+import { Heart, Pause, Play, Eye, Map, Volume2, VolumeX, Home, Clock, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Crosshair, Hammer, Zap, SkipForward, X } from 'lucide-react';
 
 interface GameCanvasProps {
     startLevel: number;
@@ -51,6 +52,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
         vx: 0,
         vy: 0,
         isGrounded: false,
+        lastGroundedTime: 0,
         isDucking: false,
         facingRight: true,
         buildMode: false,
@@ -375,6 +377,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
         player.current.vx = 0;
         player.current.vy = 0;
         player.current.isDucking = false;
+        player.current.isGrounded = false;
+        player.current.lastGroundedTime = 0;
         player.current.height = PLAYER_HEIGHT;
         player.current.currentLevel = lvlIndex;
         player.current.lastCheckpointIndex = checkpointIndex;
@@ -638,7 +642,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
         if (activePowerUp === PowerUpType.PHASE) baseSpeed *= SPEED_BOOST_MULTIPLIER;
         
         const currentJumpForce = p.buildMode ? JUMP_FORCE * 0.85 : JUMP_FORCE;
-        const effectiveGravity = activePowerUp === PowerUpType.GRAVITY_BOOTS ? GRAVITY * GRAVITY_BOOTS_MULTIPLIER : GRAVITY;
+        // Apply varying gravity: heavier when falling
+        let effectiveGravity = activePowerUp === PowerUpType.GRAVITY_BOOTS ? GRAVITY * GRAVITY_BOOTS_MULTIPLIER : GRAVITY;
+        if (p.vy > 0) {
+            effectiveGravity *= FALL_GRAVITY_MULTIPLIER; // Fall faster
+        }
 
         // --- Movement ---
         // If dashing, ignore manual input
@@ -658,9 +666,18 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
         }
 
         // --- Jumping ---
+        // Coyote Time Logic
+        if (p.isGrounded) {
+            p.lastGroundedTime = now;
+        }
+
         if (keys.has(InputKeys.W) || keys.has(InputKeys.ARROW_UP)) {
             if (jumpAllowed.current) {
-                if (p.isGrounded) {
+                // Check grounding OR Coyote Time window
+                const withinCoyoteTime = (now - p.lastGroundedTime) < COYOTE_TIME_MS;
+                const canJump = p.isGrounded || (withinCoyoteTime && p.vy >= 0); // vy >= 0 ensures we don't coyote jump at peak of another jump
+
+                if (canJump) {
                     p.vy = currentJumpForce;
                     
                     // Add momentum from moving platform if currently standing on one
@@ -674,6 +691,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                     }
 
                     p.isGrounded = false;
+                    p.lastGroundedTime = 0; // Consumption of jump entitlement
                     p.jumpCount = 1;
                     jumpAllowed.current = false;
                     audioManager.playJump();
@@ -1037,7 +1055,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
         audioManager.playDie();
         
         if (deathTimeoutRef.current) clearTimeout(deathTimeoutRef.current);
-        deathTimeoutRef.current = setTimeout(() => handleLifeLost(), 500) as unknown as number; 
+        deathTimeoutRef.current = window.setTimeout(() => handleLifeLost(), 500); 
     };
 
     const handleLifeLost = () => {
@@ -1245,10 +1263,37 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                 className="block max-w-full max-h-full object-contain"
             />
             
-            {viewMode && (
+            {viewMode && !isTouchDevice && (
                 <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-indigo-900/90 text-white px-6 py-2 rounded-full font-bold shadow-lg animate-pulse flex items-center gap-2 border border-indigo-500 z-20">
                     <Map size={18} />
                     VIEW MODE ACTIVE - [A/D] TO MOVE - [ESC/SPACE] TO EXIT
+                </div>
+            )}
+            
+            {viewMode && isTouchDevice && (
+                <div className="absolute inset-0 pointer-events-none z-30">
+                    <div className="absolute bottom-4 left-4 flex gap-4 pointer-events-auto">
+                        <button 
+                            className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full border-2 border-white/40 flex items-center justify-center active:bg-white/40 touch-none"
+                            onTouchStart={() => handleTouchStart(InputKeys.A)}
+                            onTouchEnd={() => handleTouchEnd(InputKeys.A)}
+                        >
+                            <ArrowLeft size={24} className="text-white" />
+                        </button>
+                        <button 
+                            className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full border-2 border-white/40 flex items-center justify-center active:bg-white/40 touch-none"
+                            onTouchStart={() => handleTouchStart(InputKeys.D)}
+                            onTouchEnd={() => handleTouchEnd(InputKeys.D)}
+                        >
+                            <ArrowRight size={24} className="text-white" />
+                        </button>
+                    </div>
+                    <button 
+                        onClick={() => setViewMode(false)}
+                        className="absolute top-4 right-4 pointer-events-auto bg-red-500/80 text-white px-4 py-2 rounded-full font-bold border-2 border-white/30 shadow-lg flex items-center gap-2"
+                    >
+                         <X size={20} /> EXIT
+                    </button>
                 </div>
             )}
             
@@ -1401,23 +1446,23 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
 
             {isPaused && !viewMode && (
                 <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10 backdrop-blur-sm p-4">
-                    <div className="bg-gray-800 p-8 rounded-xl border-2 border-gray-600 text-center shadow-2xl max-w-md w-full">
-                        <h2 className="text-3xl font-bold text-white mb-6">
+                    <div className="bg-gray-800 p-8 rounded-xl border-2 border-gray-600 text-center shadow-2xl max-w-md w-full max-h-full overflow-y-auto landscape:max-w-2xl">
+                        <h2 className="text-3xl font-bold text-white mb-6 landscape:mb-2">
                             PAUSED
                         </h2>
                         
                         {/* Current Loadout Display */}
-                        <div className="bg-gray-900 p-4 rounded-lg mb-4 border border-gray-700">
-                            <h3 className="text-gray-400 text-xs font-bold mb-3 uppercase tracking-wider">Current Loadout</h3>
-                            <div className="flex justify-center gap-8">
-                                <div className="flex flex-col items-center">
-                                     <div className="w-12 h-12 bg-gray-800 rounded-lg border border-gray-600 flex items-center justify-center mb-2 shadow-inner">
+                        <div className="bg-gray-900 p-4 rounded-lg mb-4 border border-gray-700 landscape:p-2 landscape:mb-2 landscape:flex landscape:items-center landscape:justify-center landscape:gap-4">
+                            <h3 className="text-gray-400 text-xs font-bold mb-3 uppercase tracking-wider landscape:mb-0">Current Loadout</h3>
+                            <div className="flex justify-center gap-8 landscape:gap-4">
+                                <div className="flex flex-col items-center landscape:flex-row landscape:gap-2">
+                                     <div className="w-12 h-12 bg-gray-800 rounded-lg border border-gray-600 flex items-center justify-center mb-2 landscape:mb-0 shadow-inner">
                                          {BlockIcon && <BlockIcon size={24} className="text-yellow-400" />}
                                      </div>
                                      <span className="text-[10px] text-gray-300 font-bold tracking-tight">{blockOption?.label}</span>
                                 </div>
-                                <div className="flex flex-col items-center">
-                                     <div className="w-12 h-12 bg-gray-800 rounded-lg border border-gray-600 flex items-center justify-center mb-2 shadow-inner">
+                                <div className="flex flex-col items-center landscape:flex-row landscape:gap-2">
+                                     <div className="w-12 h-12 bg-gray-800 rounded-lg border border-gray-600 flex items-center justify-center mb-2 landscape:mb-0 shadow-inner">
                                          {PowerUpIcon && <PowerUpIcon size={24} className="text-blue-400" />}
                                      </div>
                                      <span className="text-[10px] text-gray-300 font-bold tracking-tight">{powerUpOption?.label}</span>
@@ -1425,12 +1470,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                             </div>
                         </div>
 
-                        <div className="space-y-4">
-                            <div className="bg-gray-900 p-4 rounded-lg">
-                                <label className="text-gray-300 flex items-center gap-2 mb-2 text-sm font-bold">
-                                    <Volume2 size={16} /> SOUND VOLUME
+                        <div className="space-y-4 landscape:space-y-2">
+                            <div className="bg-gray-900 p-4 rounded-lg landscape:p-2 landscape:flex landscape:items-center landscape:gap-4">
+                                <label className="text-gray-300 flex items-center gap-2 mb-2 text-sm font-bold landscape:mb-0">
+                                    <Volume2 size={16} /> SOUND
                                 </label>
-                                <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-4 flex-1">
                                     <button 
                                         onClick={handleMuteToggle}
                                         className="text-white bg-gray-700 p-2 rounded-lg hover:bg-gray-600 transition-colors"
@@ -1448,27 +1493,29 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                                     />
                                 </div>
                             </div>
-
-                            <button 
-                                onClick={() => setIsPaused(false)}
-                                className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-transform hover:scale-105 shadow-lg"
-                            >
-                                <Play size={20} /> RESUME GAME
-                            </button>
                             
-                            <button 
-                                onClick={toggleViewMode}
-                                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-transform hover:scale-105 shadow-lg"
-                            >
-                                <Eye size={20} /> VIEW LEVEL
-                            </button>
+                            <div className="flex flex-col gap-4 landscape:flex-row landscape:gap-2">
+                                <button 
+                                    onClick={() => setIsPaused(false)}
+                                    className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-transform hover:scale-105 shadow-lg landscape:py-2 landscape:text-sm"
+                                >
+                                    <Play size={20} /> RESUME
+                                </button>
+                                
+                                <button 
+                                    onClick={toggleViewMode}
+                                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-transform hover:scale-105 shadow-lg landscape:py-2 landscape:text-sm"
+                                >
+                                    <Eye size={20} /> VIEW
+                                </button>
 
-                             <button 
-                                onClick={onHome}
-                                className="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-transform hover:scale-105 shadow-lg"
-                            >
-                                <Home size={20} /> MAIN MENU
-                            </button>
+                                 <button 
+                                    onClick={onHome}
+                                    className="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-transform hover:scale-105 shadow-lg landscape:py-2 landscape:text-sm"
+                                >
+                                    <Home size={20} /> HOME
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

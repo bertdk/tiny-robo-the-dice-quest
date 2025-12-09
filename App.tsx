@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import GameCanvas from './components/GameCanvas';
 import Dice from './components/Dice';
@@ -66,7 +67,7 @@ const App: React.FC = () => {
               console.log('Access Denied');
           }
       };
-      (window as any).unlockLevels(1000, "robo");
+      // (window as any).unlockLevels(1000, "robo");
   }, []);
 
   const saveProgress = (newProgress: LevelProgress) => {
@@ -127,25 +128,26 @@ const App: React.FC = () => {
   const handlePowerUpRoll = (result: PowerUpType) => setPowerUpType(result);
 
   return (
-    <div className={`min-h-screen bg-neutral-900 flex flex-col items-center justify-center overflow-hidden ${gameState === 'playing' ? 'w-full h-full p-0' : 'p-0 md:p-4 h-[100dvh]'}`}>
+    <div className={`fixed inset-0 bg-neutral-900 flex flex-col items-center justify-center overflow-hidden ${gameState === 'playing' ? 'p-0' : 'p-0 md:p-4'}`}>
       {/* Show Header ONLY in Menu screens, not during gameplay */}
+      {/* Updated: Always show header even on landscape mobile but smaller */}
       {gameState !== 'playing' && (
-          <header className="mb-4 text-center mt-4 md:mt-0 p-4 pb-0">
-            <h1 className="text-2xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 mb-2 font-['Press_Start_2P']">
+          <header className="mb-2 md:mb-4 text-center mt-2 md:mt-0 p-2 md:p-4 pb-0 shrink-0 landscape:mb-0 landscape:p-1">
+            <h1 className="text-xl md:text-5xl landscape:text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 mb-1 md:mb-2 font-['Press_Start_2P']">
               TINY ROBO: THE DICE QUEST
             </h1>
-            <p className="text-gray-400 text-xs md:text-base">Find the dice to escape the living room!</p>
+            <p className="text-gray-400 text-[10px] md:text-base landscape:hidden">Find the dice to escape the living room!</p>
           </header>
       )}
 
-      <main className={`flex flex-col items-center justify-center ${gameState === 'playing' ? 'w-full h-full' : 'w-full max-w-5xl h-full'}`}>
+      <main className={`flex flex-col items-center justify-center flex-1 min-h-0 w-full ${gameState === 'playing' ? '' : 'max-w-5xl'}`}>
         {gameState === 'start' && (
-          <div className="bg-gray-800 p-4 md:p-10 rounded-none md:rounded-xl shadow-2xl text-center border-0 md:border-2 border-gray-700 w-full max-w-2xl h-full md:h-auto flex flex-col justify-center">
+          <div className="bg-gray-800 p-4 md:p-10 rounded-none md:rounded-xl shadow-2xl text-center border-0 md:border-2 border-gray-700 w-full max-w-5xl h-full md:h-auto max-h-full flex flex-col justify-center overflow-y-auto custom-scrollbar landscape:overflow-hidden landscape:justify-start">
              
              {/* Dice Section */}
-             <div className="bg-gray-900 p-4 md:p-6 rounded-lg mb-8 border border-gray-700 mx-2 md:mx-0">
-                 <h2 className="text-white font-bold mb-4 text-sm md:text-base">SETUP YOUR LOADOUT</h2>
-                 <div className="flex justify-center gap-6 md:gap-12 items-center">
+             <div className="bg-gray-900 p-6 md:p-10 rounded-lg mb-6 md:mb-10 border border-gray-700 mx-0 md:mx-0 shrink-0 landscape:mb-1 landscape:p-2 landscape:py-4">
+                 <h2 className="text-white font-bold mb-4 md:mb-8 text-sm md:text-2xl landscape:hidden">SETUP YOUR LOADOUT</h2>
+                 <div className="flex justify-evenly gap-8 md:gap-48 items-center landscape:gap-16">
                      <Dice 
                         label="BLOCK TYPE" 
                         options={DICE_BLOCK_OPTIONS} 
@@ -161,29 +163,30 @@ const App: React.FC = () => {
                  </div>
              </div>
 
-             <div className={`transition-opacity duration-500 ${diceRolled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-                 <h3 className="text-white text-lg md:text-xl mb-4 font-bold">SELECT LEVEL</h3>
-                 <div className="flex justify-center flex-wrap gap-3 md:gap-4 mb-8">
+             <div className={`transition-opacity duration-500 flex-1 md:flex-none overflow-y-auto md:overflow-visible ${diceRolled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                 <h3 className="text-white text-sm md:text-xl mb-2 md:mb-4 font-bold landscape:mb-1 landscape:text-sm">SELECT LEVEL</h3>
+                 {/* Updated grid: 3 cols on mobile portrait, 6 cols on landscape/desktop for single line */}
+                 <div className="grid grid-cols-3 md:grid-cols-6 landscape:grid-cols-6 gap-2 md:gap-4 mb-4 md:mb-8 pb-4 landscape:mb-0 landscape:pb-0 landscape:px-12">
                     {Array.from({ length: MAX_LEVELS }, (_, i) => i + 1).map((level) => (
                       <button
                         key={level}
                         disabled={level > unlockedLevels}
                         onClick={() => startGame(level)}
-                        className={`w-16 h-16 md:w-24 md:h-24 rounded-lg flex flex-col items-center justify-center text-xl md:text-2xl font-bold transition-transform transform hover:scale-105 shadow-lg border-b-4 
+                        className={`aspect-square rounded-lg flex flex-col items-center justify-center text-lg md:text-2xl font-bold transition-transform transform hover:scale-105 shadow-lg border-b-4 
                           ${level <= unlockedLevels 
                             ? 'bg-blue-600 border-blue-800 text-white hover:bg-blue-500 cursor-pointer active:translate-y-1 active:border-b-0' 
                             : 'bg-gray-700 border-gray-800 text-gray-500 cursor-not-allowed opacity-70'
-                          }`}
+                          } landscape:text-sm landscape:border-b-2`}
                       >
-                        {level > unlockedLevels ? <Lock size={20} /> : level}
-                        {progress[level]?.completedAt && <span className="text-[8px] md:text-[10px] text-green-300 mt-1">✔ DONE</span>}
+                        {level > unlockedLevels ? <Lock size={20} className="landscape:w-4 landscape:h-4" /> : level}
+                        {progress[level]?.completedAt && <span className="text-[8px] md:text-[10px] text-green-300 mt-1 landscape:text-[6px]">✔</span>}
                       </button>
                     ))}
                  </div>
              </div>
              
              {!diceRolled && (
-                 <p className="text-yellow-500 text-xs md:text-sm mt-4">Roll both dice to unlock level selection!</p>
+                 <p className="text-yellow-500 text-[10px] md:text-sm mt-2 shrink-0 landscape:mt-0">Roll both dice to unlock level selection!</p>
              )}
           </div>
         )}
@@ -224,22 +227,25 @@ const App: React.FC = () => {
 
         {/* Re-roll Screen (Win Intermediate) */}
         {gameState === 'reroll' && (
-            <div className="bg-gray-800 p-8 md:p-10 rounded-none md:rounded-xl shadow-2xl text-center border-0 md:border-2 border-purple-600 w-full max-w-2xl h-full md:h-auto flex flex-col justify-center">
-                 <Trophy className="w-12 h-12 md:w-16 md:h-16 text-yellow-400 mx-auto mb-4" />
-                 <h2 className="text-2xl md:text-3xl text-white mb-2 font-bold">LEVEL COMPLETE!</h2>
-                 <p className="text-gray-300 mb-8 text-sm md:text-base">Choose one dice to re-roll for the next level, or keep your setup.</p>
+            <div className="bg-gray-800 p-2 md:p-10 rounded-none md:rounded-xl shadow-2xl text-center border-0 md:border-2 border-purple-600 w-full max-w-xl h-full flex flex-col justify-between md:justify-evenly overflow-hidden">
+                 <div className="flex-shrink-0 mt-2 md:mt-0 landscape:mt-1">
+                    <Trophy className="w-8 h-8 md:w-16 md:h-16 text-yellow-400 mx-auto mb-1 md:mb-4 landscape:w-6 landscape:h-6" />
+                    <h2 className="text-lg md:text-3xl text-white mb-1 md:mb-2 font-bold landscape:text-base">LEVEL COMPLETE!</h2>
+                    <p className="text-gray-300 mb-2 md:mb-8 text-xs md:text-base px-4 landscape:mb-1 landscape:hidden">Choose one dice to re-roll for the next level, or keep your setup.</p>
+                 </div>
                  
-                 <div className="bg-gray-900 p-6 md:p-8 rounded-lg mb-8 flex flex-col md:flex-row justify-center gap-8 md:gap-12 mx-2 md:mx-0">
+                 <div className="bg-gray-900 p-2 md:p-4 rounded-lg mb-2 md:mb-4 flex flex-row justify-center gap-4 md:gap-12 mx-2 md:mx-0 flex-1 items-center shrink-0 landscape:p-2 landscape:mb-1 landscape:gap-8">
                      <div className="flex flex-col items-center">
-                         <span className="text-white text-xs mb-2">CURRENT: {blockType}</span>
+                         <span className="text-white text-[10px] md:text-xs mb-1 md:mb-2">{blockType}</span>
                          <Dice 
                             label="RE-ROLL BLOCK?" 
                             options={DICE_BLOCK_OPTIONS} 
                             onRollComplete={handleBlockRoll} 
                          />
                      </div>
+                     <div className="w-px h-24 md:h-32 bg-gray-700 mx-1 md:mx-2 md:hidden landscape:h-16"></div>
                      <div className="flex flex-col items-center">
-                         <span className="text-white text-xs mb-2">CURRENT: {powerUpType}</span>
+                         <span className="text-white text-[10px] md:text-xs mb-1 md:mb-2">{powerUpType}</span>
                          <Dice 
                             label="RE-ROLL POWER?" 
                             options={DICE_POWERUP_OPTIONS} 
@@ -250,15 +256,15 @@ const App: React.FC = () => {
 
                  <button 
                     onClick={() => startGame(selectedLevel + 1)}
-                    className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 px-10 rounded-lg text-xl transition-colors shadow-[0_4px_0_rgb(88,28,135)] active:translate-y-1 active:shadow-none flex items-center gap-2 mx-auto w-full md:w-auto justify-center"
+                    className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 md:py-4 px-6 md:px-10 rounded-lg text-sm md:text-xl transition-colors shadow-[0_4px_0_rgb(88,28,135)] active:translate-y-1 active:shadow-none flex items-center gap-2 mx-auto w-full md:w-auto justify-center mb-2 md:mb-0 shrink-0 landscape:py-2 landscape:px-8"
                  >
-                   START LEVEL {selectedLevel + 1} <ArrowRight />
+                   START LEVEL {selectedLevel + 1} <ArrowRight size={18} />
                  </button>
             </div>
         )}
 
         {gameState === 'win' && (
-          <div className="bg-gray-800 p-10 rounded-none md:rounded-xl shadow-2xl text-center border-0 md:border-2 border-yellow-600 w-full max-w-lg h-full md:h-auto flex flex-col justify-center">
+          <div className="bg-gray-800 p-10 rounded-none md:rounded-xl shadow-2xl text-center border-0 md:border-2 border-yellow-600 w-full max-w-lg h-full flex flex-col justify-evenly">
              <Trophy className="w-24 h-24 text-yellow-400 mx-auto mb-4" />
              <h2 className="text-4xl text-yellow-400 mb-4 font-bold">VICTORY!</h2>
              <p className="text-white mb-8">You have conquered the entire house!</p>
