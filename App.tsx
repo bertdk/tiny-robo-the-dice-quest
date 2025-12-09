@@ -136,7 +136,7 @@ const App: React.FC = () => {
             <h1 className="text-xl landscape:text-xl md:text-5xl md:landscape:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 mb-1 md:mb-2 font-['Press_Start_2P']">
               TINY ROBO: THE DICE QUEST
             </h1>
-            <p className="text-gray-400 text-[10px] md:text-base landscape:hidden">Find the dice to escape the living room!</p>
+            <p className="text-gray-400 text-sm md:text-base hidden sm:block">Find the dice to escape the living room!</p>
           </header>
       )}
 
@@ -146,7 +146,7 @@ const App: React.FC = () => {
              
              {/* Dice Section */}
              <div className="bg-gray-900 p-6 landscape:p-2 md:landscape:p-12 lg:landscape:p-16 rounded-lg mb-6 landscape:mb-1 md:landscape:mb-8 border border-gray-700 mx-0 md:mx-0 shrink-0">
-                 <h2 className="text-white font-bold mb-4 md:mb-8 text-sm md:text-2xl landscape:hidden">SETUP YOUR LOADOUT</h2>
+                 <h2 className="text-white font-bold mb-4 md:mb-8 text-lg md:text-2xl hidden sm:block">SETUP YOUR LOADOUT</h2>
                  <div className="flex justify-evenly gap-8 landscape:gap-16 md:landscape:gap-48 items-center">
                      <Dice 
                         label="BLOCK TYPE" 
