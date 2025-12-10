@@ -19,7 +19,7 @@ export const PLAYER_WIDTH = 30;
 export const PLAYER_HEIGHT = 48;
 export const DUCK_HEIGHT = 24;
 
-export const MAX_LEVELS = 8;
+export const MAX_LEVELS = 9;
 export const CHECKPOINTS_PER_LEVEL = 6;
 
 // Powerup Constants
@@ -86,7 +86,7 @@ export const BLOCK_COLORS = {
 
 export const DICE_BLOCK_OPTIONS = [
     { type: BlockType.SQUARE, icon: Square, label: 'Square' },
-    { type: BlockType.FLOATING, icon: BoxSelect, label: 'Floating' },
+    { type: BlockType.FLOATING, icon: BoxSelect, label: 'Float' },
     { type: BlockType.HIGH, icon: ArrowUpToLine, label: 'High' },
     { type: BlockType.WIDE, icon: MoveHorizontal, label: 'Wide' },
     { type: BlockType.TEMPORARY, icon: Clock, label: 'Temp (2s)' },

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import GameCanvas from './components/GameCanvas';
 import Dice from './components/Dice';
@@ -76,7 +77,7 @@ const App: React.FC = () => {
               console.log('Access Denied');
           }
       };
-      window.unlockLevels('robo')
+      // window.unlockLevels('robo')
   }, []);
 
   const saveProgress = (newProgress: LevelProgress) => {
@@ -263,7 +264,7 @@ const App: React.FC = () => {
 
              <div className={`transition-opacity duration-500 flex-1 md:flex-none overflow-y-auto md:overflow-visible ${diceRolled || isAdminMode ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
                  <h3 className="text-white text-sm md:text-xl mb-2 md:mb-4 font-bold landscape:mb-1 landscape:text-sm">SELECT LEVEL</h3>
-                 <div className="grid grid-cols-3 md:grid-cols-6 landscape:grid-cols-6 gap-2 md:gap-4 mb-4 md:mb-8 pb-4 landscape:mb-0 landscape:pb-0 landscape:px-12">
+                 <div className="grid grid-cols-3 md:grid-cols-5 landscape:grid-cols-5 gap-2 md:gap-4 mb-4 md:mb-8 pb-4 landscape:mb-0 landscape:pb-0 landscape:px-12">
                     {Array.from({ length: MAX_LEVELS }, (_, i) => i + 1).map((level) => (
                       <button
                         key={level}
