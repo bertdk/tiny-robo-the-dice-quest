@@ -206,7 +206,7 @@ const App: React.FC = () => {
              )}
 
              {/* Dice / Loadout Section */}
-             <div className="bg-gray-900 p-6 landscape:p-2 md:landscape:p-12 lg:landscape:p-16 rounded-lg mb-6 landscape:mb-1 md:landscape:mb-8 border border-gray-700 mx-0 md:mx-0 shrink-0">
+             <div className="bg-gray-900 p-6 landscape:p-2 md:landscape:p-12 lg:landscape:p-4 rounded-lg mb-6 landscape:mb-1 md:landscape:mb-8 border border-gray-700 mx-0 md:mx-0 shrink-0">
                  <h2 className="text-white font-bold mb-4 md:mb-8 text-lg md:text-2xl hidden sm:block">SETUP YOUR LOADOUT</h2>
                  
                  {/* Normal User: Dice Roll */}
@@ -270,7 +270,7 @@ const App: React.FC = () => {
                         key={level}
                         disabled={!isAdminMode && level > unlockedLevels}
                         onClick={() => startGame(level)}
-                        className={`aspect-square rounded-lg flex flex-col items-center justify-center text-lg md:text-2xl font-bold transition-transform transform hover:scale-105 shadow-lg border-b-4 
+                        className={`h-20 md:h-24 rounded-lg flex flex-col items-center justify-center text-lg md:text-2xl font-bold transition-transform transform hover:scale-105 shadow-lg border-b-4 
                           ${level <= unlockedLevels || isAdminMode
                             ? 'bg-blue-600 border-blue-800 text-white hover:bg-blue-500 cursor-pointer active:translate-y-1 active:border-b-0' 
                             : 'bg-gray-700 border-gray-800 text-gray-500 cursor-not-allowed opacity-70'
