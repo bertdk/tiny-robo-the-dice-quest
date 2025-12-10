@@ -19,7 +19,7 @@ export const PLAYER_WIDTH = 30;
 export const PLAYER_HEIGHT = 48;
 export const DUCK_HEIGHT = 24;
 
-export const MAX_LEVELS = 6;
+export const MAX_LEVELS = 9;
 export const CHECKPOINTS_PER_LEVEL = 6;
 
 // Powerup Constants
@@ -65,6 +65,10 @@ export const COLORS = {
     lampShade: '#f1c40f',
     lampDark: '#f39c12'
   },
+  enemies: {
+    fruitFly: '#8e44ad',
+    fruitFlyWing: '#ecf0f1'
+  },
   ui: {
     text: '#333',
     deconstruct: 'rgba(52, 152, 219, 0.8)'
@@ -82,7 +86,7 @@ export const BLOCK_COLORS = {
 
 export const DICE_BLOCK_OPTIONS = [
     { type: BlockType.SQUARE, icon: Square, label: 'Square' },
-    { type: BlockType.FLOATING, icon: BoxSelect, label: 'Floating' },
+    { type: BlockType.FLOATING, icon: BoxSelect, label: 'Float' },
     { type: BlockType.HIGH, icon: ArrowUpToLine, label: 'High' },
     { type: BlockType.WIDE, icon: MoveHorizontal, label: 'Wide' },
     { type: BlockType.TEMPORARY, icon: Clock, label: 'Temp (2s)' },

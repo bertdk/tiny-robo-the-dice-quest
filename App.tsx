@@ -1,10 +1,16 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import GameCanvas from './components/GameCanvas';
 import Dice from './components/Dice';
-import { Trophy, Skull, Lock, ArrowRight } from 'lucide-react';
+import { Trophy, Skull, Lock, ArrowRight, ShieldCheck, MapPin } from 'lucide-react';
 import { BlockType, PowerUpType } from './types';
 import { DICE_BLOCK_OPTIONS, DICE_POWERUP_OPTIONS, MAX_LEVELS } from './constants';
+
+declare global {
+  interface Window {
+    unlockLevels: (pass: string) => void;
+  }
+}
 
 interface LevelProgress {
   [levelId: number]: {
@@ -19,6 +25,11 @@ const App: React.FC = () => {
   const [selectedLevel, setSelectedLevel] = useState(1);
   const [progress, setProgress] = useState<LevelProgress>({});
   const [gameId, setGameId] = useState(0); 
+  
+  // Admin State
+  const [isAdminMode, setIsAdminMode] = useState(false);
+  const [adminCheckpointSelection, setAdminCheckpointSelection] = useState<number | null>(null);
+  const startCheckpointRef = useRef(0);
 
   // Loadout State
   const [blockType, setBlockType] = useState<BlockType | null>(null);
@@ -27,14 +38,13 @@ const App: React.FC = () => {
 
   // Auto-lock when both rolled
   useEffect(() => {
-      if (blockType && powerUpType && !diceRolled) {
-          // Add a tiny delay for animation feeling, but make it snappy
+      if (blockType && powerUpType && !diceRolled && !isAdminMode) {
           const t = setTimeout(() => {
               setDiceRolled(true);
           }, 100); 
           return () => clearTimeout(t);
       }
-  }, [blockType, powerUpType, diceRolled]);
+  }, [blockType, powerUpType, diceRolled, isAdminMode]);
 
   // Load progress
   useEffect(() => {
@@ -44,7 +54,6 @@ const App: React.FC = () => {
         const parsed = JSON.parse(savedProgress) as LevelProgress;
         setProgress(parsed);
         let maxUnlocked = 1;
-        // Check up to MAX_LEVELS - 1 to see what should be unlocked
         for (let i = 1; i < MAX_LEVELS; i++) {
            if (parsed[i]?.completedAt) {
                maxUnlocked = Math.max(maxUnlocked, i + 1);
@@ -57,17 +66,18 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Expose Unlock Tool
+  // Expose Unlock Tool (Admin Toggle)
   useEffect(() => {
-      (window as any).unlockLevels = (n: number, pass: string) => {
+      window.unlockLevels = (pass: string) => {
           if (pass === 'robo') {
-              setUnlockedLevels(Math.min(n, MAX_LEVELS));
-              console.log(`Unlocked ${n} levels`);
+              setIsAdminMode(true);
+              setUnlockedLevels(MAX_LEVELS);
+              console.log(`ADMIN MODE ACTIVATED`);
           } else {
               console.log('Access Denied');
           }
       };
-      // (window as any).unlockLevels(1000, "robo");
+      // window.unlockLevels('robo')
   }, []);
 
   const saveProgress = (newProgress: LevelProgress) => {
@@ -76,15 +86,30 @@ const App: React.FC = () => {
   };
 
   const startGame = (level: number) => {
-    if (!blockType || !powerUpType) return; // Should allow starting only if loaded out
+    if (!blockType || !powerUpType) return; 
     
+    // In Admin mode, open checkpoint selector first
+    if (isAdminMode) {
+        setSelectedLevel(level);
+        setAdminCheckpointSelection(level); 
+        return;
+    }
+
+    launchGame(level, 0);
+  };
+  
+  const launchGame = (level: number, checkpoint: number) => {
     setSelectedLevel(level);
+    startCheckpointRef.current = checkpoint;
     setGameId(prev => prev + 1);
+    setAdminCheckpointSelection(null); 
     
-    const newProgress = { ...progress };
-    if (!newProgress[level]) newProgress[level] = {};
-    newProgress[level].startedAt = new Date().toISOString();
-    saveProgress(newProgress);
+    if (!isAdminMode) {
+        const newProgress = { ...progress };
+        if (!newProgress[level]) newProgress[level] = {};
+        newProgress[level].startedAt = new Date().toISOString();
+        saveProgress(newProgress);
+    }
 
     setGameState('playing');
   };
@@ -94,21 +119,22 @@ const App: React.FC = () => {
   };
 
   const handleWin = () => {
-    const newProgress = { ...progress };
-    if (!newProgress[selectedLevel]) newProgress[selectedLevel] = {};
-    newProgress[selectedLevel].completedAt = new Date().toISOString();
-    saveProgress(newProgress);
+    if (!isAdminMode) {
+        const newProgress = { ...progress };
+        if (!newProgress[selectedLevel]) newProgress[selectedLevel] = {};
+        newProgress[selectedLevel].completedAt = new Date().toISOString();
+        saveProgress(newProgress);
 
-    const nextLevel = selectedLevel + 1;
-    if (nextLevel <= MAX_LEVELS && nextLevel > unlockedLevels) {
-      setUnlockedLevels(nextLevel);
+        const nextLevel = selectedLevel + 1;
+        if (nextLevel <= MAX_LEVELS && nextLevel > unlockedLevels) {
+          setUnlockedLevels(nextLevel);
+        }
     }
     
-    // Go to Re-roll screen if there is a next level, otherwise simple Win screen
-    if (nextLevel <= MAX_LEVELS) {
+    if (selectedLevel < MAX_LEVELS) {
         setGameState('reroll');
     } else {
-        setGameState('win'); // Game fully beat
+        setGameState('win'); 
     }
   };
 
@@ -123,69 +149,141 @@ const App: React.FC = () => {
       setDiceRolled(false);
   };
   
-  // Handlers for Dice
   const handleBlockRoll = (result: BlockType) => setBlockType(result);
   const handlePowerUpRoll = (result: PowerUpType) => setPowerUpType(result);
 
   return (
     <div className={`fixed inset-0 bg-neutral-900 flex flex-col items-center justify-center overflow-hidden ${gameState === 'playing' ? 'p-0' : 'p-0 md:p-4'}`}>
-      {/* Show Header ONLY in Menu screens, not during gameplay */}
-      {/* Updated: Always show header even on landscape mobile but smaller */}
+      {/* Show Header ONLY in Menu screens */}
       {gameState !== 'playing' && (
           <header className="mb-2 md:mb-4 text-center mt-2 md:mt-0 p-2 md:p-4 pb-0 shrink-0 landscape:mb-0 landscape:p-1">
             <h1 className="text-xl landscape:text-xl md:text-5xl md:landscape:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 mb-1 md:mb-2 font-['Press_Start_2P']">
               TINY ROBO: THE DICE QUEST
             </h1>
             <p className="text-gray-400 text-sm md:text-base hidden sm:block">Find the dice to escape the living room!</p>
+            {isAdminMode && (
+                <div className="text-red-500 font-bold text-xs uppercase tracking-widest mt-2 animate-pulse flex items-center justify-center gap-2">
+                    <ShieldCheck size={14} /> ADMIN MODE ACTIVE
+                </div>
+            )}
           </header>
       )}
 
       <main className={`flex flex-col items-center justify-center flex-1 min-h-0 w-full ${gameState === 'playing' ? '' : 'max-w-7xl'}`}>
         {gameState === 'start' && (
-          <div className="bg-gray-800 p-4 md:p-10 rounded-none md:rounded-xl shadow-2xl text-center border-0 md:border-2 border-gray-700 w-full max-w-7xl h-full md:h-auto max-h-full flex flex-col justify-center overflow-y-auto custom-scrollbar landscape:overflow-hidden landscape:justify-start">
+          <div className="bg-gray-800 p-4 md:p-10 rounded-none md:rounded-xl shadow-2xl text-center border-0 md:border-2 border-gray-700 w-full max-w-7xl h-full md:h-auto max-h-full flex flex-col justify-center overflow-y-auto custom-scrollbar landscape:overflow-hidden landscape:justify-start relative">
              
-             {/* Dice Section */}
+             {/* Admin Checkpoint Selection Modal */}
+             {adminCheckpointSelection !== null && (
+                 <div className="absolute inset-0 bg-gray-900/95 z-50 flex flex-col items-center justify-center p-4">
+                     <h3 className="text-2xl text-white font-bold mb-8 flex items-center gap-2">
+                         <MapPin className="text-red-500" /> CHOOSE SPAWN POINT
+                     </h3>
+                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                         <button 
+                             onClick={() => launchGame(adminCheckpointSelection, 0)}
+                             className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-6 rounded-lg shadow-lg"
+                         >
+                             START
+                         </button>
+                         {[1, 2, 3, 4, 5, 6].map(cp => (
+                             <button
+                                 key={cp}
+                                 onClick={() => launchGame(adminCheckpointSelection, cp)}
+                                 className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 px-6 rounded-lg border border-gray-600"
+                             >
+                                 CHECKPOINT {cp}
+                             </button>
+                         ))}
+                     </div>
+                     <button 
+                        onClick={() => setAdminCheckpointSelection(null)}
+                        className="mt-8 text-red-400 hover:text-red-300 font-bold underline"
+                     >
+                         CANCEL
+                     </button>
+                 </div>
+             )}
+
+             {/* Dice / Loadout Section */}
              <div className="bg-gray-900 p-6 landscape:p-2 md:landscape:p-12 lg:landscape:p-16 rounded-lg mb-6 landscape:mb-1 md:landscape:mb-8 border border-gray-700 mx-0 md:mx-0 shrink-0">
                  <h2 className="text-white font-bold mb-4 md:mb-8 text-lg md:text-2xl hidden sm:block">SETUP YOUR LOADOUT</h2>
-                 <div className="flex justify-evenly gap-8 landscape:gap-16 md:landscape:gap-48 items-center">
-                     <Dice 
-                        label="BLOCK TYPE" 
-                        options={DICE_BLOCK_OPTIONS} 
-                        onRollComplete={handleBlockRoll} 
-                        locked={diceRolled}
-                     />
-                     <Dice 
-                        label="POWER UP" 
-                        options={DICE_POWERUP_OPTIONS} 
-                        onRollComplete={handlePowerUpRoll} 
-                        locked={diceRolled}
-                     />
-                 </div>
+                 
+                 {/* Normal User: Dice Roll */}
+                 {!isAdminMode ? (
+                     <div className="flex justify-evenly gap-8 landscape:gap-16 md:landscape:gap-48 items-center">
+                         <Dice 
+                            label="BLOCK TYPE" 
+                            options={DICE_BLOCK_OPTIONS} 
+                            onRollComplete={handleBlockRoll} 
+                            locked={diceRolled}
+                         />
+                         <Dice 
+                            label="POWER UP" 
+                            options={DICE_POWERUP_OPTIONS} 
+                            onRollComplete={handlePowerUpRoll} 
+                            locked={diceRolled}
+                         />
+                     </div>
+                 ) : (
+                     /* Admin User: Manual Selection */
+                     <div className="flex flex-col md:flex-row gap-8 w-full">
+                         <div className="flex-1">
+                             <h3 className="text-gray-400 text-sm font-bold mb-2">SELECT BLOCK</h3>
+                             <div className="grid grid-cols-3 gap-2">
+                                 {DICE_BLOCK_OPTIONS.map((opt) => (
+                                     <button 
+                                        key={opt.label}
+                                        onClick={() => setBlockType(opt.type)}
+                                        className={`p-2 rounded border flex flex-col items-center justify-center gap-1 ${blockType === opt.type ? 'bg-yellow-600 border-yellow-400 text-white' : 'bg-gray-800 border-gray-700 text-gray-500 hover:bg-gray-700'}`}
+                                     >
+                                         <opt.icon size={20} />
+                                         <span className="text-[10px] font-bold">{opt.label}</span>
+                                     </button>
+                                 ))}
+                             </div>
+                         </div>
+                         <div className="flex-1">
+                             <h3 className="text-gray-400 text-sm font-bold mb-2">SELECT POWER UP</h3>
+                             <div className="grid grid-cols-3 gap-2">
+                                 {DICE_POWERUP_OPTIONS.map((opt) => (
+                                     <button 
+                                        key={opt.label}
+                                        onClick={() => setPowerUpType(opt.type)}
+                                        className={`p-2 rounded border flex flex-col items-center justify-center gap-1 ${powerUpType === opt.type ? 'bg-blue-600 border-blue-400 text-white' : 'bg-gray-800 border-gray-700 text-gray-500 hover:bg-gray-700'}`}
+                                     >
+                                         <opt.icon size={20} />
+                                         <span className="text-[10px] font-bold">{opt.label}</span>
+                                     </button>
+                                 ))}
+                             </div>
+                         </div>
+                     </div>
+                 )}
              </div>
 
-             <div className={`transition-opacity duration-500 flex-1 md:flex-none overflow-y-auto md:overflow-visible ${diceRolled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+             <div className={`transition-opacity duration-500 flex-1 md:flex-none overflow-y-auto md:overflow-visible ${diceRolled || isAdminMode ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
                  <h3 className="text-white text-sm md:text-xl mb-2 md:mb-4 font-bold landscape:mb-1 landscape:text-sm">SELECT LEVEL</h3>
-                 {/* Updated grid: 3 cols on mobile portrait, 6 cols on landscape/desktop for single line */}
-                 <div className="grid grid-cols-3 md:grid-cols-6 landscape:grid-cols-6 gap-2 md:gap-4 mb-4 md:mb-8 pb-4 landscape:mb-0 landscape:pb-0 landscape:px-12">
+                 <div className="grid grid-cols-3 md:grid-cols-5 landscape:grid-cols-5 gap-2 md:gap-4 mb-4 md:mb-8 pb-4 landscape:mb-0 landscape:pb-0 landscape:px-12">
                     {Array.from({ length: MAX_LEVELS }, (_, i) => i + 1).map((level) => (
                       <button
                         key={level}
-                        disabled={level > unlockedLevels}
+                        disabled={!isAdminMode && level > unlockedLevels}
                         onClick={() => startGame(level)}
                         className={`aspect-square rounded-lg flex flex-col items-center justify-center text-lg md:text-2xl font-bold transition-transform transform hover:scale-105 shadow-lg border-b-4 
-                          ${level <= unlockedLevels 
+                          ${level <= unlockedLevels || isAdminMode
                             ? 'bg-blue-600 border-blue-800 text-white hover:bg-blue-500 cursor-pointer active:translate-y-1 active:border-b-0' 
                             : 'bg-gray-700 border-gray-800 text-gray-500 cursor-not-allowed opacity-70'
                           } landscape:text-sm landscape:border-b-2`}
                       >
-                        {level > unlockedLevels ? <Lock size={20} className="landscape:w-4 landscape:h-4" /> : level}
+                        {(level > unlockedLevels && !isAdminMode) ? <Lock size={20} className="landscape:w-4 landscape:h-4" /> : level}
                         {progress[level]?.completedAt && <span className="text-[8px] md:text-[10px] text-green-300 mt-1 landscape:text-[6px]">✔</span>}
                       </button>
                     ))}
                  </div>
              </div>
              
-             {!diceRolled && (
+             {!diceRolled && !isAdminMode && (
                  <p className="text-yellow-500 text-[10px] md:text-sm mt-2 shrink-0 landscape:mt-0">Roll both dice to unlock level selection!</p>
              )}
           </div>
@@ -195,8 +293,10 @@ const App: React.FC = () => {
           <GameCanvas 
             key={`${selectedLevel}-${gameId}`} 
             startLevel={selectedLevel}
+            initialCheckpoint={startCheckpointRef.current}
             activeBlockType={blockType}
             activePowerUp={powerUpType}
+            isAdminMode={isAdminMode}
             onGameOver={handleGameOver} 
             onWin={handleWin}
             onHome={handleHome}
@@ -216,7 +316,7 @@ const App: React.FC = () => {
                   MAIN MENU
                 </button>
                 <button 
-                  onClick={() => startGame(selectedLevel)}
+                  onClick={() => launchGame(selectedLevel, 0)}
                   className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-lg text-lg transition-colors shadow-[0_4px_0_rgb(30,58,138)] active:translate-y-1 active:shadow-none"
                 >
                   RETRY LEVEL {selectedLevel}
