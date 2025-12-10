@@ -11,20 +11,22 @@ import {
     BlockType, PowerUpType
 } from '../types';
 import { createLevel } from '../utils/levelGenerator';
-import { drawRect, drawRobot, drawSpike, drawSpider, drawCheckpoint, drawLamp, drawIntroDice, drawFlyingFace, drawProjectile, drawBuiltBlock, drawMovingPlatform } from '../utils/renderer';
+import { drawRect, drawRobot, drawSpike, drawSpider, drawCheckpoint, drawLamp, drawIntroDice, drawFlyingFace, drawProjectile, drawBuiltBlock, drawMovingPlatform, drawFruitFly } from '../utils/renderer';
 import { audioManager } from '../utils/audioManager';
-import { Heart, Pause, Play, Eye, Map, Volume2, VolumeX, Home, Clock, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Crosshair, Hammer, Zap, SkipForward, X } from 'lucide-react';
+import { Heart, Pause, Play, Eye, Map, Volume2, VolumeX, Home, Clock, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Crosshair, Hammer, Zap, SkipForward, X, Infinity as InfinityIcon } from 'lucide-react';
 
 interface GameCanvasProps {
     startLevel: number;
+    initialCheckpoint?: number;
     activeBlockType: BlockType;
     activePowerUp: PowerUpType | null;
+    isAdminMode?: boolean;
     onGameOver: (level: number) => void;
     onWin: () => void;
     onHome: () => void;
 }
 
-const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, activePowerUp, onGameOver, onWin, onHome }) => {
+const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, initialCheckpoint = 0, activeBlockType, activePowerUp, isAdminMode = false, onGameOver, onWin, onHome }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const requestRef = useRef<number>(0);
     const previousTimeRef = useRef<number>(0);
@@ -60,7 +62,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
         state: 'idle',
         lives: activePowerUp === PowerUpType.EXTRA_LIFE ? 4 : 3,
         currentLevel: startLevel,
-        lastCheckpointIndex: 0,
+        lastCheckpointIndex: initialCheckpoint,
         
         jumpCount: 0,
         canDoubleJump: activePowerUp === PowerUpType.DOUBLE_JUMP,
@@ -73,7 +75,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
     const viewCamera = useRef<Camera>({ x: 0, y: 0 }); // Camera for View Mode
     
     // Intro State
-    const introState = useRef({ active: true, x: 0, rotation: 0, nextCheckpointIndex: 1 });
+    // If we start at a specific checkpoint (admin mode), skip intro
+    const introState = useRef({ active: initialCheckpoint === 0, x: 0, rotation: 0, nextCheckpointIndex: 1 });
     const flyingFaces = useRef<FlyingFace[]>([]);
 
     const lastBuildTime = useRef<number>(0);
@@ -90,7 +93,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
     const [volume, setVolume] = useState(audioManager.getVolume());
     const [isMuted, setIsMuted] = useState(audioManager.isAudioMuted());
     const [isBuildMode, setIsBuildMode] = useState(false); // UI State
-    const [isIntroActive, setIsIntroActive] = useState(true); // State to trigger re-renders for UI
+    const [isIntroActive, setIsIntroActive] = useState(initialCheckpoint === 0); // State to trigger re-renders for UI
     const [timeLeft, setTimeLeft] = useState<number>(0); // UI State for Timer
     const [isTouchDevice, setIsTouchDevice] = useState(false);
 
@@ -157,7 +160,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
         handleResize(); // Initial call
 
         // Initialize level on mount ONLY
-        resetLevel(startLevel, 0, true);
+        resetLevel(startLevel, initialCheckpoint, initialCheckpoint === 0);
         
         // Touch Detection
         const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -419,6 +422,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
         setCurrentLevel(lvlIndex);
     };
 
+    // ... [Rest of the file remains unchanged from previous versions, only resetLevel logic updated above] ...
+    
     const handleAction = () => {
         if (player.current.state === 'dead') return;
 
@@ -522,7 +527,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                     return; 
                 }
                 
-                if (e.type === EntityType.ENEMY_SPIDER) {
+                if (e.type === EntityType.ENEMY_SPIDER || e.type === EntityType.FRUIT_FLY) {
                     levelData.current.entities.splice(i, 1);
                     intersectingEntityIndex = -1; 
                     break; 
@@ -750,11 +755,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
         }
         
         // Handle Moving Platform Horizontal Carry
-        // We do this before collision to ensure player moves "with" the platform
         const ridingPlatform = levelData.current.entities.find(e => 
             e.type === EntityType.MOVING_PLATFORM && 
             Math.abs((p.y + p.height) - e.y) < 6 && // Increased Tolerance
-            p.x + p.width > e.x && p.x < e.x + e.width // Overlapping horizontally
+            p.x + p.width > e.x && p.x < e.x + e.width 
         );
         
         if (ridingPlatform && ridingPlatform.vx) {
@@ -762,7 +766,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
         }
 
         // Collision Resolution X 
-        // FIX: Ignore riding platform for X collision to allow walking on top of it without snagging
+        // Ignore riding platform for X collision to allow walking on top of it without snagging
         resolveEnvironmentCollisions(p, 'x', ridingPlatform); 
 
         p.y += p.vy;
@@ -801,50 +805,42 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
             handleLifeLost();
         }
 
-        // --- Entity Logic (Blocks & Spiders & Projectiles & Moving Platforms & Spikes) ---
+        // --- Entity Logic ---
         const entities = levelData.current.entities;
         for (let i = entities.length - 1; i >= 0; i--) {
             const e = entities[i];
             
-            // Falling Spikes Logic (Improved Prediction)
+            // Falling Spikes Logic
             if (e.type === EntityType.FALLING_SPIKE) {
+                if (e.static) continue; // Static spikes don't fall
+
                 if (!e.triggered) {
                     const delayMs = 300;
                     const fallSpeed = 10;
                     
-                    // Vertical check first
                     const distY = (p.y + p.height) - e.y;
                     
                     if (distY > 0 && distY < TILE_SIZE * 15) {
-                        // Calculate Time to Impact
-                        // Time = Delay + FallTime
-                        // FallTime = Distance / Speed
-                        // We use updates as unit of time for x-prediction since vx is per update
                         const updatesToFall = distY / fallSpeed;
                         const updatesToDelay = delayMs / MS_PER_UPDATE;
                         const totalUpdates = updatesToFall + updatesToDelay;
                         
-                        // Predict Player X
-                        // Include Platform Velocity in prediction for accuracy!
                         const effectiveVx = p.vx + (ridingPlatform && ridingPlatform.vx ? ridingPlatform.vx : 0);
                         const predictedX = p.x + (effectiveVx * totalUpdates);
                         
-                        // Check if spike X overlaps with Predicted Player X range
                         const spikeCenter = e.x + e.width / 2;
                         const playerHalfWidth = p.width / 2;
                         
-                        // Overlap check
                         if (predictedX + playerHalfWidth > e.x && predictedX < e.x + e.width) {
                              e.triggered = true;
                              e.triggerTime = now;
-                             audioManager.playTrapTrigger(); // Sound effect
+                             audioManager.playTrapTrigger(); 
                         } else {
-                            // Also trigger if player is simply standing directly under it (static case)
                             const currentDistX = Math.abs((p.x + p.width/2) - spikeCenter);
                             if (currentDistX < TILE_SIZE / 2) {
                                 e.triggered = true;
                                 e.triggerTime = now;
-                                audioManager.playTrapTrigger(); // Sound effect
+                                audioManager.playTrapTrigger();
                             }
                         }
                     }
@@ -853,17 +849,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                 }
                 
                 if (e.falling) {
-                    e.y += 10; // Fast fall
+                    e.y += 10;
                     if (e.y > canvasSizeRef.current.height) {
                         entities.splice(i, 1);
                         continue;
                     }
-                    
-                    // Check player collision
                      if (isRectIntersect(p.x, p.y, p.width, p.height, e.x + 8, e.y + 8, e.width - 16, e.height - 12)) {
                         triggerDeathAnimation();
                      }
-                     // Check ground collision
                      for (const other of entities) {
                          if (other.type === EntityType.PLATFORM) {
                              if (isRectIntersect(e.x, e.y, e.width, e.height, other.x, other.y, other.width, other.height)) {
@@ -876,8 +869,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                 continue;
             }
 
-            // Moving Platforms
+            // Moving Platforms & Attached Entities
             if (e.type === EntityType.MOVING_PLATFORM) {
+                const prevX = e.x;
+                const prevY = e.y;
+                
                 if (e.vx) {
                     e.x += e.vx;
                     if ((e.vx > 0 && e.x >= (e.patrolMax || 0)) || (e.vx < 0 && e.x <= (e.patrolMin || 0))) {
@@ -891,75 +887,106 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                     }
                 }
                 
-                // CRUSH BLOCKS: Check for intersection with built blocks
+                // Move Attached Entities
+                const dx = e.x - prevX;
+                const dy = e.y - prevY;
+                if (dx !== 0 || dy !== 0) {
+                     for (const attached of entities) {
+                         if (attached.attachedTo === e.id) {
+                             attached.x += dx;
+                             attached.y += dy;
+                         }
+                     }
+                }
+
+                // CRUSH BLOCKS
                 for (let j = entities.length - 1; j >= 0; j--) {
                     const other = entities[j];
                     if (other.type === EntityType.BUILT_BLOCK) {
                          if (isRectIntersect(e.x, e.y, e.width, e.height, other.x, other.y, other.width, other.height)) {
-                             audioManager.playDeconstruct(); // Crunch sound
+                             audioManager.playDeconstruct();
                              entities.splice(j, 1);
-                             if (i > j) i--; // Adjust index
+                             if (i > j) i--; 
                          }
                     }
                 }
                 continue;
             }
             
+            // Fruit Fly AI
+            if (e.type === EntityType.FRUIT_FLY) {
+                 if (e.properties && e.vx) {
+                     e.x += e.vx;
+                     // Bounds check
+                     if (e.x < e.properties.startX || e.x > e.properties.endX) {
+                         e.vx *= -1; 
+                         e.x += e.vx; 
+                     }
+                     
+                     // Check collision with built blocks (bounce)
+                     for (const block of entities) {
+                         if (block.type === EntityType.BUILT_BLOCK) {
+                             if (isRectIntersect(e.x, e.y, e.width, e.height, block.x, block.y, block.width, block.height)) {
+                                 e.vx *= -1;
+                                 e.x += e.vx; 
+                                 break;
+                             }
+                         }
+                     }
+
+                     // Sine wave movement
+                     const flyTime = now / 200;
+                     const yOffset = Math.sin(flyTime) * 1.5;
+                     e.y = (e.properties.originalY || e.y) + yOffset;
+                 }
+                 continue;
+            }
+            
             // Projectiles
             if (e.type === EntityType.PROJECTILE) {
                 e.x += (e.vx || 0);
-                // Check enemy collision
                 for (let j = entities.length - 1; j >= 0; j--) {
                     const target = entities[j];
-                    if (target.type === EntityType.ENEMY_SPIDER) {
+                    if (target.type === EntityType.ENEMY_SPIDER || target.type === EntityType.FRUIT_FLY) {
                          if (isRectIntersect(e.x, e.y, e.width, e.height, target.x, target.y, target.width, target.height)) {
-                             // Kill both
                              entities.splice(j, 1);
-                             if (i > j) i--; // Adjust current index
+                             if (i > j) i--; 
                              entities.splice(i, 1);
-                             // Play hit sound?
                              break;
                          }
                     }
                 }
-                // Cleanup out of bounds
                 if (e.x < 0 || e.x > levelData.current.width) {
                     entities.splice(i, 1);
                 }
                 continue;
             }
 
-            // Falling Blocks
+            // Falling Blocks Logic
             if (e.type === EntityType.BUILT_BLOCK) {
-                // Expiration
                 if (e.expiresAt && now > e.expiresAt) {
                     entities.splice(i, 1);
                     continue;
                 }
-                
-                // Physics
                 if (e.falling) {
                     e.vy = (e.vy || 0) + GRAVITY;
                     e.y += e.vy;
-                    
-                    // Simple collision with platforms/floor
                     let landed = false;
                     for (const other of entities) {
                         if (e === other) continue;
                         if (other.type === EntityType.PLATFORM || other.type === EntityType.BUILT_BLOCK || other.type === EntityType.MOVING_PLATFORM) {
                              if (isRectIntersect(e.x, e.y, e.width, e.height, other.x, other.y, other.width, other.height)) {
-                                 // Landed
                                  e.y = other.y - e.height;
                                  e.vy = 0;
                                  landed = true;
                              }
                         }
                     }
-                    if (e.y > canvasSizeRef.current.height + 100) entities.splice(i, 1); // remove if fell out
+                    if (e.y > canvasSizeRef.current.height + 100) entities.splice(i, 1); 
                 }
             }
 
-            // Enemy AI
+            // Spider AI
             if (e.type === EntityType.ENEMY_SPIDER) {
                  if (e.properties && e.vx) {
                      e.x += e.vx;
@@ -989,14 +1016,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
         
         const entities = levelData.current.entities;
         for (const e of entities) {
-            if (e === ignoreEntity) continue; // Skip the entity we are riding (if any) to prevent sticking
+            if (e === ignoreEntity) continue; 
+            // Also ignore entities attached to the ignored platform
+            if (ignoreEntity && e.attachedTo === ignoreEntity.id) continue;
 
             if (e.type === EntityType.PLATFORM || e.type === EntityType.BUILT_BLOCK || e.type === EntityType.LAMP || e.type === EntityType.MOVING_PLATFORM) {
                 if (isRectIntersect(p.x, p.y, p.width, p.height, e.x, e.y, e.width, e.height)) {
                     if (axis === 'x') {
-                        // Allow passing through if phasing/dashing
                         if (canPassThroughWalls) continue; 
-
                         if (p.vx > 0) p.x = e.x - p.width;
                         else if (p.vx < 0) p.x = e.x + e.width;
                     } else {
@@ -1030,10 +1057,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                      }
                 }
             }
-            else if (e.type === EntityType.SPIKE || e.type === EntityType.ENEMY_SPIDER) {
-                const hazardHitbox = { 
-                    x: e.x + 8, y: e.y + 8, width: e.width - 16, height: e.height - 12 
-                };
+            else if (e.type === EntityType.SPIKE || e.type === EntityType.FALLING_SPIKE || e.type === EntityType.ENEMY_SPIDER || e.type === EntityType.FRUIT_FLY) {
+                // Adjust hitbox for hazards
+                let hazardHitbox = { x: e.x + 8, y: e.y + 8, width: e.width - 16, height: e.height - 12 };
+                // Fruit fly is smaller, customize hitbox
+                if (e.type === EntityType.FRUIT_FLY) {
+                    hazardHitbox = { x: e.x + 2, y: e.y + 2, width: e.width - 4, height: e.height - 4 };
+                }
+
                 if (isRectIntersect(p.x, p.y, p.width, p.height, hazardHitbox.x, hazardHitbox.y, hazardHitbox.width, hazardHitbox.height)) {
                     triggerDeathAnimation();
                     return; 
@@ -1041,7 +1072,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
             }
         }
     };
-
+    
+    // ... [Rest of helper functions remain unchanged]
     const isOverlapping = (a: Entity, b: Entity) => {
         return a.x < b.x + b.width && a.x + a.width > b.x &&
                a.y < b.y + b.height && a.y + a.height > b.y;
@@ -1059,19 +1091,28 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
     };
 
     const handleLifeLost = () => {
-        // Delayed Game Over check for Time Limit
-        if (levelData.current.timeLimit && timerRef.current <= 0) {
+        if (levelData.current.timeLimit && timerRef.current <= 0 && !isAdminMode) {
              onGameOver(player.current.currentLevel);
              return;
         }
 
-        player.current.lives -= 1;
-        setLives(player.current.lives);
-        if (player.current.lives <= 0) {
+        // If admin mode, don't decrement lives
+        if (!isAdminMode) {
+            player.current.lives -= 1;
+            setLives(player.current.lives);
+        }
+
+        // If admin mode, prevent Game Over from lives
+        if (player.current.lives <= 0 && !isAdminMode) {
              onGameOver(player.current.currentLevel);
         } else {
-             // Pass current timer value to preserve it
-             resetLevel(player.current.currentLevel, player.current.lastCheckpointIndex, false, timerRef.current);
+             // If timer ran out but we are admin, reset timer to max to allow continuing
+             let nextTimer = timerRef.current;
+             if (isAdminMode && levelData.current.timeLimit && timerRef.current <= 0) {
+                 nextTimer = levelData.current.timeLimit * 1000;
+             }
+             
+             resetLevel(player.current.currentLevel, player.current.lastCheckpointIndex, false, nextTimer);
         }
     };
 
@@ -1082,29 +1123,20 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
     const updateCamera = () => {
         const { width, height } = canvasSizeRef.current;
         const isPortrait = height > width;
-        
-        // Calculate Camera Y Offset
-        // Larger offset = Camera looks higher up = Player appears lower on screen
-        // Smaller offset = Camera looks lower down = Player appears higher on screen
         let offsetY;
         if (isTouchDeviceRef.current) {
             if (isPortrait) {
-                // Portrait: Player higher up (ground lower) -> Smaller offset
                 offsetY = height / 1.6; 
             } else {
-                // Landscape: Player standard high for controls -> Medium offset
                 offsetY = height / 2.2;
             }
         } else {
-            // Desktop: Player lower (standard platformer view) -> Large offset
             offsetY = height / 1.5;
         }
         
         let targetX = player.current.x - width / 2;
         targetX = Math.max(0, Math.min(targetX, levelData.current.width - width));
         
-        // Prevent camera shaking when ducking
-        // Use the standing Y position even if ducking
         let trackY = player.current.y;
         if (player.current.isDucking) {
             trackY -= (PLAYER_HEIGHT - DUCK_HEIGHT);
@@ -1131,19 +1163,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
             } else if (!isPausedRef.current) {
                 updatePhysics();
                 
-                // Timer Logic for Levels 5 & 6
                 if (timerRef.current > 0 && player.current.state !== 'dead') {
                     timerRef.current -= MS_PER_UPDATE;
                     if (timerRef.current <= 0) {
                          timerRef.current = 0;
-                         triggerDeathAnimation(); // Time's up! Triggers death animation -> handleLifeLost -> GameOver
+                         triggerDeathAnimation(); 
                     }
                 }
             }
             lagRef.current -= MS_PER_UPDATE;
         }
         
-        // Sync timer UI to ref (avoiding re-renders inside lag loop)
         const secondsLeft = Math.ceil(timerRef.current / 1000);
         if (secondsLeft !== timeLeft) {
             setTimeLeft(secondsLeft);
@@ -1178,6 +1208,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                     drawSpike(ctx, activeCam, e);
                 } else if (e.type === EntityType.ENEMY_SPIDER) {
                     drawSpider(ctx, activeCam, e);
+                } else if (e.type === EntityType.FRUIT_FLY) {
+                    drawFruitFly(ctx, activeCam, e);
                 } else if (e.type === EntityType.CHECKPOINT) {
                     drawCheckpoint(ctx, activeCam, e, e.properties.index <= player.current.lastCheckpointIndex);
                 } else if (e.type === EntityType.LAMP) {
@@ -1199,10 +1231,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
             if (!introState.current.active && !viewModeRef.current && !isPausedRef.current && player.current.buildMode && player.current.state !== 'dead') {
                 const p = player.current;
                 
-                // Determine dimensions for preview based on active type
                 let typeToBuild = activeBlockType;
                 if (typeToBuild === BlockType.RANDOM) {
-                    // Just pick Random for preview visual, doesn't matter much as logic is randomized on build
                 }
                 
                 let buildWidth = TILE_SIZE;
@@ -1216,7 +1246,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                     buildHeight = TILE_SIZE / 2;
                 }
 
-                // Recalculate positions based on dimension
                 let buildX, buildY;
                 const GAP = 2;
                 if (p.facingRight) buildX = p.x + p.width + GAP;
@@ -1236,11 +1265,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                 }
 
                 if (intersectingType === EntityType.BUILT_BLOCK) buildState = 'deconstruct';
-                else if (intersectingType === EntityType.ENEMY_SPIDER) buildState = 'valid';
+                else if (intersectingType === EntityType.ENEMY_SPIDER || intersectingType === EntityType.FRUIT_FLY) buildState = 'valid';
                 else if (intersectingType === EntityType.PLATFORM || intersectingType === EntityType.LAMP || intersectingType === EntityType.MOVING_PLATFORM || playerOverlap) buildState = 'invalid';
                 else buildState = 'valid';
                 
-                // Draw Preview using Renderer
                 const ghostColor = BLOCK_COLORS[typeToBuild] ? BLOCK_COLORS[typeToBuild].replace('1)', '0.3)') : undefined;
                 drawRobot(ctx, activeCam, player.current, activePowerUp, buildState, {
                     width: buildWidth, height: buildHeight, color: ghostColor || 'rgba(241, 196, 15, 0.3)'
@@ -1262,16 +1290,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                 height={canvasSize.height}
                 className="block max-w-full max-h-full object-contain"
             />
-            
+            {/* View Mode UI ... */}
             {viewMode && !isTouchDevice && (
                 <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-indigo-900/90 text-white px-6 py-2 rounded-full font-bold shadow-lg animate-pulse flex items-center gap-2 border border-indigo-500 z-20">
                     <Map size={18} />
                     VIEW MODE ACTIVE - [A/D] TO MOVE - [ESC/SPACE] TO EXIT
                 </div>
             )}
-            
+            {/* ... Mobile Controls ... */}
             {viewMode && isTouchDevice && (
                 <div className="absolute inset-0 pointer-events-none z-30">
+                     {/* View Mode Touch Controls */}
                     <div className="absolute bottom-4 left-4 flex gap-4 pointer-events-auto">
                         <button 
                             className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full border-2 border-white/40 flex items-center justify-center active:bg-white/40 touch-none"
@@ -1297,13 +1326,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                 </div>
             )}
             
+            {/* Skip Intro UI */}
             {isIntroActive && !isTouchDevice && (
                 <div className="absolute bottom-8 right-8 text-white font-bold text-lg animate-pulse select-none pointer-events-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] z-20">
                     PRESS [SPACE] TO SKIP
                 </div>
             )}
 
-            {/* TOUCH SPECIFIC SKIP BUTTON */}
             {isIntroActive && isTouchDevice && (
                 <button 
                     onClick={skipIntro}
@@ -1313,9 +1342,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                 </button>
             )}
             
-            {/* MOBILE CONTROLS OVERLAY - Hidden during intro or view mode */}
+            {/* Main Mobile Controls Overlay */}
             {!viewMode && !isPaused && isTouchDevice && !isIntroActive && (
-                <div className="absolute inset-0 pointer-events-none z-30 lg:hidden">
+                <div className="absolute inset-0 pointer-events-none z-30">
                     <div className="absolute bottom-4 left-4 flex gap-1 pointer-events-auto landscape:bottom-4 landscape:left-4">
                         <button 
                             className="w-12 h-12 sm:w-16 sm:h-16 landscape:w-12 landscape:h-12 landscape:sm:w-12 landscape:sm:h-12 bg-white/20 backdrop-blur-sm rounded-full border-2 border-white/40 flex items-center justify-center active:bg-white/40 touch-none"
@@ -1381,29 +1410,32 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                 </div>
             )}
             
+            {/* HUD */}
             {!viewMode && !isIntroActive && (
                 <div className="absolute top-4 left-0 right-0 px-4 grid grid-cols-3 items-start pointer-events-none z-10">
-                    {/* Left: Level & Lives */}
                     <div className="flex gap-2 sm:gap-4 items-center justify-start flex-wrap">
                         <div className="bg-black/50 px-2 sm:px-3 py-1 rounded flex items-center gap-2 text-white font-bold text-xs sm:text-lg whitespace-nowrap">
                             <span>Level: {currentLevel}</span>
                         </div>
                         <div className="bg-black/50 px-2 sm:px-3 py-1 rounded flex items-center gap-1 text-red-500">
-                            {[...Array(5)].map((_, i) => (
-                                i < lives && (
-                                <Heart 
-                                    key={i} 
-                                    size={16} 
-                                    fill="currentColor" 
-                                    strokeWidth={2.5}
-                                    className="sm:w-5 sm:h-5"
-                                />
-                                )
-                            ))}
+                            {isAdminMode ? (
+                                <InfinityIcon size={20} />
+                            ) : (
+                                [...Array(5)].map((_, i) => (
+                                    i < lives && (
+                                    <Heart 
+                                        key={i} 
+                                        size={16} 
+                                        fill="currentColor" 
+                                        strokeWidth={2.5}
+                                        className="sm:w-5 sm:h-5"
+                                    />
+                                    )
+                                ))
+                            )}
                         </div>
                     </div>
                     
-                    {/* Center: Active Loadout Icons + TIMER */}
                     <div className="flex flex-col items-center justify-center pointer-events-auto gap-2">
                          <div className="flex items-center gap-2 bg-black/50 px-3 py-1 rounded border border-gray-700 shadow-lg">
                             {BlockIcon && <BlockIcon size={20} className="text-yellow-400" />}
@@ -1411,7 +1443,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                             {PowerUpIcon && <PowerUpIcon size={20} className="text-blue-400" />}
                          </div>
                          
-                         {/* TIMER DISPLAY */}
                          {timerRef.current > 0 && (
                              <div className={`flex items-center gap-2 bg-black/50 px-3 py-1 rounded border shadow-lg font-mono font-bold text-lg ${timeLeft <= 10 ? 'text-red-500 animate-pulse border-red-500' : 'text-white border-gray-700'}`}>
                                  <Clock size={18} />
@@ -1420,9 +1451,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                          )}
                     </div>
 
-                    {/* Right: Build Mode & Pause */}
                     <div className="flex gap-2 sm:gap-4 justify-end pointer-events-auto items-start">
-                        {/* Hide Build Mode Label on Touch Devices (lg:flex ensures it hides on lg-hidden screens) */}
                         <div className="hidden lg:flex flex-col items-end relative">
                             <div className={`px-3 py-1 rounded flex items-center gap-2 transition-colors duration-200 text-lg font-bold ${isBuildMode ? 'bg-orange-600 ring-2 ring-yellow-400 text-white' : 'bg-black/50 text-gray-300'}`}>
                                 {isBuildMode ? 'BUILD MODE ON' : 'BUILD MODE'} <span className="text-xs bg-white/20 px-1 rounded">[F]</span>
@@ -1444,6 +1473,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                 </div>
             )}
 
+            {/* Pause Menu */}
             {isPaused && !viewMode && (
                 <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10 backdrop-blur-sm p-4">
                     <div className="bg-gray-800 p-8 rounded-xl border-2 border-gray-600 text-center shadow-2xl max-w-md w-full max-h-full overflow-y-auto landscape:max-w-2xl">
@@ -1451,7 +1481,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ startLevel, activeBlockType, ac
                             PAUSED
                         </h2>
                         
-                        {/* Current Loadout Display */}
                         <div className="bg-gray-900 p-4 rounded-lg mb-4 border border-gray-700 landscape:p-2 landscape:mb-2 landscape:flex landscape:items-center landscape:justify-center landscape:gap-4">
                             <h3 className="text-gray-400 text-xs font-bold mb-3 uppercase tracking-wider landscape:mb-0">Current Loadout</h3>
                             <div className="flex justify-center gap-8 landscape:gap-4">

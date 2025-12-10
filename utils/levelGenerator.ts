@@ -32,7 +32,7 @@ const generateMovingPlatform = (x: number, y: number, w: number, range: number, 
 };
 
 const generateSpike = (x: number, y: number): Entity => ({
-  id: Math.random().toString(36).substr(2, 9),
+  id: Math.random().toString(36).slice(2, 9),
   type: EntityType.SPIKE,
   x: x * TILE_SIZE,
   y: y * TILE_SIZE,
@@ -41,7 +41,7 @@ const generateSpike = (x: number, y: number): Entity => ({
 });
 
 const generateFallingSpike = (x: number, y: number): Entity => ({
-  id: Math.random().toString(36).substr(2, 9),
+  id: Math.random().toString(36).slice(2, 9),
   type: EntityType.FALLING_SPIKE,
   x: x * TILE_SIZE,
   y: y * TILE_SIZE,
@@ -51,8 +51,33 @@ const generateFallingSpike = (x: number, y: number): Entity => ({
   triggered: false
 });
 
+const generateSpikedMovingPlatform = (x: number, y: number, w: number, range: number, axis: 'x' | 'y', side: 'top' | 'bottom' = 'top'): Entity[] => {
+    const platform = generateMovingPlatform(x, y, w, range, axis);
+    const entities = [platform];
+    
+    for(let i = 0; i < w; i++) {
+        let spike: Entity;
+        if (side === 'bottom') {
+             // Downward pointing spike that sticks to the platform
+             spike = generateFallingSpike(0, 0); 
+             spike.static = true;
+             spike.y = platform.y + platform.height;
+        } else {
+             // Upward pointing spike
+             spike = generateSpike(0, 0); 
+             spike.y = platform.y - spike.height;
+        }
+        
+        // We set initial relative position, but updatePhysics will keep it synced
+        spike.x = platform.x + i * TILE_SIZE;
+        spike.attachedTo = platform.id;
+        entities.push(spike);
+    }
+    return entities;
+};
+
 const generateSpider = (x: number, y: number, patrolDistance: number): Entity => ({
-  id: Math.random().toString(36).substr(2, 9),
+  id: Math.random().toString(36).slice(2, 9),
   type: EntityType.ENEMY_SPIDER,
   x: x * TILE_SIZE,
   y: y * TILE_SIZE,
@@ -60,6 +85,17 @@ const generateSpider = (x: number, y: number, patrolDistance: number): Entity =>
   height: TILE_SIZE * 0.6,
   vx: 2,
   properties: { startX: x * TILE_SIZE, endX: (x + patrolDistance) * TILE_SIZE }
+});
+
+const generateFruitFly = (x: number, y: number, patrolDistance: number): Entity => ({
+  id: Math.random().toString(36).slice(2, 9),
+  type: EntityType.FRUIT_FLY,
+  x: x * TILE_SIZE,
+  y: y * TILE_SIZE,
+  width: TILE_SIZE * 0.8,
+  height: TILE_SIZE * 0.5,
+  vx: 1.5,
+  properties: { startX: x * TILE_SIZE, endX: (x + patrolDistance) * TILE_SIZE, originalY: y * TILE_SIZE }
 });
 
 const generateCheckpoint = (index: number, x: number, y: number): Entity => ({
@@ -74,13 +110,22 @@ const generateCheckpoint = (index: number, x: number, y: number): Entity => ({
 });
 
 const generateHangingLamp = (x: number, length: number): Entity => ({
-  id: Math.random().toString(36).substr(2, 9),
+  id: Math.random().toString(36).slice(2, 9),
   type: EntityType.LAMP, // Use LAMP type for rendering, behaves like platform
   x: x * TILE_SIZE,
   y: 0,
   width: TILE_SIZE,
   height: length * TILE_SIZE,
 });
+
+const generateSpikedLamp = (x: number, length: number): Entity[] => {
+    const lamp = generateHangingLamp(x, length);
+    const spike = generateFallingSpike(x, 0); // Y set below
+    spike.y = length * TILE_SIZE; // At the bottom of the lamp
+    spike.originalY = spike.y;
+    spike.static = true; // Does not fall
+    return [lamp, spike];
+};
 
 // --- Furniture Generators ---
 
@@ -209,298 +254,335 @@ export const createLevel = (levelIndex: number): LevelData => {
   if (levelIndex === 1) {
      // --- LEVEL 1: EASY (Movement Basics) ---
      levelWidth = 120;
-     
      addFloor(0, 15);
      add(createSofa(8, groundY, 4, COLORS.furniture.sofaRed));
      addCheckpoint(1, 10, groundY - 3); 
-
      addFloor(15, 12);
      add(createTable(18, groundY, 5));
      addCheckpoint(2, 20, groundY - 4); 
-
      addFloor(27, 10);
      addPit(37, 3);
-     
      addFloor(40, 12);
      add(createTVStand(42, groundY));
      addCheckpoint(3, 42, groundY - 2); 
-     
      add(generateHangingLamp(48, 5));
-
      addFloor(52, 15);
      add(createBookshelf(60, groundY, 5)); 
      addCheckpoint(4, 60, groundY - 5);
-
      addFloor(67, 18); 
      add(createSofa(75, groundY, 5, COLORS.furniture.sofaBlue));
      addCheckpoint(5, 75, groundY - 6);
-     
      addPit(85, 4); 
-     
      addFloor(89, 10);
      add(createTable(92, groundY, 4));
      add(generateHangingLamp(94, 6)); 
-
      addFloor(99, 21);
      add(createSofa(105, groundY, 4, COLORS.furniture.sofaRed));
      addCheckpoint(6, 115, groundY); 
-
   } else if (levelIndex === 2) {
       // --- LEVEL 2: MEDIUM (Building & Hazards) ---
       levelWidth = 145;
-
       addFloor(0, 22); 
       add(generateRect(10, groundY - 5, 2, 5, COLORS.platforms.wood)); 
       addCheckpoint(1, 15, groundY);
-
       addPit(22, 5);
       addFloor(27, 15);
       add(createTable(30, groundY, 6));
       add(generateSpider(30, groundY - 4 - 0.6, 6)); // Spider on Table
       addCheckpoint(2, 38, groundY); // CP on floor behind table
-
       addPit(42, 4);
       addFloor(46, 10);
       add(createBookshelf(50, groundY, 7)); 
       addCheckpoint(3, 50, groundY - 7);
-
       addFloor(56, 20);
       add(createSofa(62, groundY, 5, COLORS.furniture.sofaRed));
       add(generateSpider(63, groundY - 3 - 0.7, 3)); 
       addCheckpoint(4, 67, groundY);
       add(generateHangingLamp(72, 8)); 
-
       addPit(76, 6); 
       addFloor(82, 15);
       add(createTVStand(88, groundY));
       addCheckpoint(5, 88, groundY - 2);
-
       addPit(97, 5);
       addFloor(102, 10);
       add(createBookshelf(105, groundY, 5));
       add(generateHangingLamp(108, 7));
-      
       addFloor(112, 15);
       add(createTable(115, groundY, 8));
       add(generateSpider(115, groundY - 4 - 0.7, 8)); 
-      
       addFloor(127, 20);
       addCheckpoint(6, 140, groundY);
-
   } else if (levelIndex === 3) {
       // --- LEVEL 3: HARD (Precision) ---
       levelWidth = 185;
-
       addFloor(0, 8);
       addPit(8, 25);
       add(generateRect(12, groundY - 2, 2, 1, COLORS.platforms.wood)); 
       add(generateRect(18, groundY - 1, 2, 1, COLORS.platforms.wood));
       add(generateRect(24, groundY - 3, 2, 1, COLORS.platforms.wood));
       addCheckpoint(1, 25, groundY - 3 - 1);
-
       addFloor(33, 10);
       add(createBookshelf(37, groundY, 6)); 
       addCheckpoint(2, 37, groundY - 6 - 1);
-
       addFloor(43, 5);
       addPit(48, 10); 
       addFloor(58, 12);
       add(generateSpider(59, groundY - 1, 8)); 
       addCheckpoint(3, 64, groundY);
-
       addFloor(70, 5);
       addPit(75, 30); 
       add(createTable(80, groundY, 4)); // Raised from pit 
       add(createSofa(90, groundY + 1, 4, COLORS.furniture.sofaBlue)); 
       add(generateSpider(92, groundY + 1 - 3 - 0.7, 3));
       addCheckpoint(4, 92, groundY + 1 - 3 - 1); 
-
       addFloor(105, 12);
       add(createTVStand(110, groundY));
       addCheckpoint(5, 112, groundY - 5 - 1); 
-      
       addPit(117, 8);
       addFloor(125, 10);
       add(createBookshelf(128, groundY, 6)); // Shortened bookshelf
       add(generateHangingLamp(128, 5)); 
-      
       addPit(135, 10);
       add(generateRect(140, groundY, 2, 1, COLORS.platforms.wood)); 
-      
       addFloor(145, 10);
       add(createTable(148, groundY, 5));
       add(generateSpider(148, groundY - 4 - 0.7, 5)); 
-
       addFloor(155, 30);
       addCheckpoint(6, 175, groundY);
-
   } else if (levelIndex === 4) {
       // --- LEVEL 4: CLOCKWORK (Moving Platforms) ---
       levelWidth = 160;
-
       addFloor(0, 15);
       addCheckpoint(1, 10, groundY);
-
-      // Pit with moving platform
       addPit(15, 10);
       add(generateMovingPlatform(16, groundY - 2, 3, 8, 'x'));
-      
       addFloor(25, 5);
       addCheckpoint(2, 27, groundY);
-
-      // Double moving platforms over spikes
       addPit(30, 20);
       add(generateMovingPlatform(30, groundY - 3, 3, 6, 'x'));
       add(generateMovingPlatform(38, groundY - 1, 3, 6, 'x'));
-
       addFloor(50, 8);
       add(createBookshelf(53, groundY, 6));
       addCheckpoint(3, 53, groundY - 6 - 1);
-
-      // Vertical moving platform sequence (FIXED: Above ground)
       addPit(58, 8);
       add(generateMovingPlatform(60, groundY - 6, 3, 6, 'y')); // Moves Up/Down strictly above ground
-      
       addFloor(66, 10);
       add(generateSpider(67, groundY - 1, 8));
       addCheckpoint(4, 71, groundY);
-
       addFloor(76, 20);
       add(createSofa(80, groundY, 5, COLORS.furniture.sofaRed));
-      // Extended range to bridge gap to next section
       add(generateMovingPlatform(88, groundY - 5, 4, 15, 'x')); // High flying
-      
       addPit(96, 12);
-      
       addFloor(108, 10);
       add(createTVStand(110, groundY));
-      addCheckpoint(5, 112, groundY - 5); // Reachable via TV stand
-
+      addCheckpoint(5, 112, groundY - 5); 
       addPit(118, 15);
       add(generateMovingPlatform(118, groundY - 2, 3, 10, 'x'));
       add(generateHangingLamp(125, 6)); 
-
       addFloor(133, 27);
       addCheckpoint(6, 150, groundY);
-
   } else if (levelIndex === 5) {
       // --- LEVEL 5: TIME ATTACK (60s Limit) ---
-      levelWidth = 150; // Widened slightly for end section
+      levelWidth = 150; 
       timeLimit = 60; 
-
       addFloor(0, 10);
       addCheckpoint(1, 8, groundY);
-
-      // Series of small jumps
       addPit(10, 30);
       add(generateRect(12, groundY - 1, 2, 1, COLORS.platforms.wood));
       add(generateRect(16, groundY - 3, 2, 1, COLORS.platforms.wood));
       add(generateRect(20, groundY - 1, 2, 1, COLORS.platforms.wood));
       add(generateRect(24, groundY - 4, 2, 1, COLORS.platforms.wood));
       addCheckpoint(2, 24, groundY - 4 - 1);
-
-      // Elevator section (FIXED: Above ground)
       add(generateMovingPlatform(30, groundY - 7, 3, 6, 'y'));
       add(generateRect(36, groundY - 6, 4, 1, COLORS.platforms.wood)); 
       addCheckpoint(3, 38, groundY - 6 - 1);
-
       addFloor(40, 10); 
       add(createTable(42, groundY, 6));
       add(generateSpider(42, groundY - 4 - 0.7, 6));
-
-      // Fast moving horizontal platforms
       addPit(50, 20);
       add(generateMovingPlatform(50, groundY - 2, 2, 8, 'x'));
       add(generateMovingPlatform(60, groundY - 2, 2, 8, 'x'));
-      
       addFloor(70, 8);
       addCheckpoint(4, 74, groundY);
-
-      // Lamp swings
       addPit(78, 15);
       add(generateRect(85, groundY - 3, 2, 1, COLORS.platforms.wood));
       add(generateHangingLamp(82, 5));
       add(generateHangingLamp(88, 5));
-      
       addFloor(93, 10);
       add(createBookshelf(96, groundY, 5));
       addCheckpoint(5, 96, groundY - 5 - 1);
-
-      // END SECTION DIFFICULTY SPIKE
       addPit(103, 15);
       add(generateMovingPlatform(103, groundY - 1, 3, 12, 'x'));
       add(generateHangingLamp(110, 6));
-      
       addFloor(118, 30);
       add(createSofa(125, groundY, 4, COLORS.furniture.sofaBlue));
       add(generateSpider(125, groundY - 1, 10)); // Spider guarding finish
       addCheckpoint(6, 140, groundY);
-
   } else if (levelIndex === 6) {
       // --- LEVEL 6: THE GAUNTLET (120s Limit) ---
       levelWidth = 200;
       timeLimit = 180; 
-
       addFloor(0, 10);
       addCheckpoint(1, 5, groundY);
-
-      // Intro Moving Platform (Extended range for better reach)
       addPit(10, 10);
       add(generateMovingPlatform(10, groundY - 2, 3, 8, 'x'));
-
       addFloor(20, 10);
       add(createTVStand(22, groundY));
       addCheckpoint(2, 24, groundY - 5);
-
-      // Vertical Climb (FIXED: Above ground)
       addPit(30, 20);
-      add(generateMovingPlatform(32, groundY - 6, 3, 6, 'y')); // Elevator 1
-      add(generateMovingPlatform(40, groundY - 10, 3, 8, 'y')); // Elevator 2
-      
+      add(generateMovingPlatform(32, groundY - 6, 3, 6, 'y')); 
+      add(generateMovingPlatform(40, groundY - 10, 3, 8, 'y')); 
       addFloor(50, 15);
       add(createBookshelf(55, groundY, 8)); // High wall
       addCheckpoint(3, 55, groundY - 8 - 1);
-
-      // Spider Run
       addFloor(65, 20);
       add(createTable(70, groundY, 10));
       add(generateSpider(70, groundY - 4 - 0.7, 10)); 
       add(generateSpider(65, groundY - 1, 20)); 
       addCheckpoint(4, 80, groundY - 4 - 1);
-
-      // Chaos Section (FIXED: Above ground)
       addPit(85, 30);
       add(generateMovingPlatform(86, groundY - 2, 2, 5, 'x'));
       add(generateRect(95, groundY - 4, 2, 1, COLORS.platforms.wood));
       add(generateMovingPlatform(100, groundY - 6, 2, 6, 'y'));
       add(generateHangingLamp(105, 7));
-
       addFloor(115, 10);
       addCheckpoint(5, 120, groundY);
-
-      // Final Stretch
       addPit(125, 30);
       add(generateMovingPlatform(125, groundY - 2, 3, 20, 'x')); 
-      
-      // Falling Spikes Trap between lamps
       add(generateHangingLamp(135, 6));
-      add(generateRect(140, 0, 3, 2, COLORS.platforms.wood)); // Ceiling for spikes
-      add(generateFallingSpike(140, 2)); // Trap
-      add(generateFallingSpike(141, 2)); // Trap
-      add(generateFallingSpike(142, 2)); // Trap
+      add(generateRect(138, 0, 6, 2, COLORS.platforms.wood)); 
+      add(generateFallingSpike(138, 2)); 
+      add(generateFallingSpike(139, 2)); 
+      add(generateFallingSpike(140, 2)); 
+      add(generateFallingSpike(141, 2)); 
+      add(generateFallingSpike(142, 2)); 
+      add(generateFallingSpike(143, 2)); 
       add(generateHangingLamp(145, 6));
-
       addFloor(155, 45);
       add(createSofa(160, groundY, 5, COLORS.furniture.sofaRed));
-      add(generateSpider(160, groundY - 3 - 0.6, 5)); // Spider on Sofa
-
+      add(generateSpider(160, groundY - 3 - 0.6, 5)); 
       add(createTable(170, groundY, 5));
-      add(generateSpider(170, groundY - 0.6, 5)); // Spider under table
-      add(generateSpider(170, groundY - 4 - 0.6, 5)); // Spider on table
-
+      add(generateSpider(170, groundY - 0.6, 5)); 
+      add(generateSpider(170, groundY - 4 - 0.6, 5)); 
       add(createBookshelf(180, groundY, 6));
-      
       addCheckpoint(6, 190, groundY);
+  } else if (levelIndex === 7) {
+      // --- LEVEL 7: THE HORNET'S NEST (Extreme Difficulty) ---
+      levelWidth = 220;
+      addFloor(0, 8);
+      addCheckpoint(1, 5, groundY);
+      addPit(8, 20);
+      add(generateRect(12, groundY - 2, 2, 1, COLORS.platforms.wood));
+      add(generateFruitFly(15, groundY - 4, 6));
+      add(generateRect(18, groundY - 1, 2, 1, COLORS.platforms.wood));
+      add(generateFruitFly(21, groundY - 3, 6));
+      addFloor(28, 10);
+      addCheckpoint(2, 32, groundY);
+      addPit(38, 25);
+      add(generateSpikedMovingPlatform(40, groundY - 2, 3, 10, 'x')); // Danger platform
+      add(generateMovingPlatform(45, groundY - 5, 2, 6, 'x')); // Safe platform higher up
+      add(generateFruitFly(50, groundY - 6, 8));
+      addFloor(63, 10);
+      addCheckpoint(3, 68, groundY);
+      add(generateFallingSpike(72, groundY - 14)); // Trap above platform
+      addPit(73, 20);
+      add(generateRect(75, groundY - 5, 2, 1, COLORS.platforms.wood));
+      add(generateMovingPlatform(80, groundY - 8, 3, 6, 'y'));
+      add(generateFruitFly(80, groundY - 5, 5));
+      addFloor(93, 15);
+      add(createTVStand(96, groundY));
+      add(generateFruitFly(96, groundY - 3, 6));
+      addCheckpoint(4, 100, groundY - 5);
+      addPit(108, 30);
+      add(generateMovingPlatform(110, groundY - 3, 2, 4, 'y'));
+      add(generateMovingPlatform(116, groundY - 4, 4, 5, 'y'));
+      add(generateMovingPlatform(125, groundY - 3, 2, 4, 'y'));
+      add(generateMovingPlatform(132, groundY - 4, 4, 5, 'y'));
+      add(generateFruitFly(112, groundY - 6, 20));
+      add(generateFruitFly(115, groundY - 2, 20));
+      add(generateFruitFly(120, groundY - 5, 20));
+      addFloor(138, 10);
+      addCheckpoint(5, 142, groundY);
+      addPit(148, 40);
+      add(generateSpikedMovingPlatform(150, groundY - 2, 3, 15, 'x'));
+      add(generateSpikedMovingPlatform(165, groundY - 5, 3, 15, 'x'));
+      add(generateMovingPlatform(160, groundY - 8, 2, 20, 'x')); // The safe path high up
+      add(generateRect(170, 0, 5, 1, COLORS.platforms.wood)); // Ceiling anchor
+      add(generateFallingSpike(170, 1));
+      add(generateFallingSpike(172, 1));
+      add(generateFallingSpike(174, 1));
+      addFloor(188, 32);
+      add(createSofa(195, groundY, 4, COLORS.furniture.sofaRed));
+      add(generateFruitFly(195, groundY - 3, 6));
+      add(generateSpider(200, groundY - 1, 10));
+      addCheckpoint(6, 210, groundY);
+  } else if (levelIndex === 8) {
+      // --- LEVEL 8: THE ELECTRIC HIVE (Spiked Lamps & Precision) ---
+      levelWidth = 240;
+      
+      addFloor(0, 10);
+      addCheckpoint(1, 5, groundY);
+      
+      // Intro: Spiked Lamps
+      addPit(10, 20);
+      add(generateMovingPlatform(12, groundY - 2, 2, 8, 'x'));
+      add(generateSpikedLamp(14, 8)); // Static spike hanging
+      add(generateMovingPlatform(22, groundY - 4, 2, 6, 'x'));
+      add(generateSpikedLamp(25, 6));
+      
+      addFloor(30, 12);
+      add(createTable(32, groundY, 6));
+      add(generateFruitFly(35, groundY - 5, 5));
+      addCheckpoint(2, 40, groundY);
+      
+      // The Vertical Climb
+      addPit(45, 15);
+      add(generateRect(48, groundY - 3, 2, 1, COLORS.platforms.wood));
+      add(generateMovingPlatform(55, groundY - 6, 2, 8, 'y'));
+      add(generateSpikedLamp(55, 6)); // Hazard next to moving platform
+      add(createBookshelf(65, groundY, 8));
+      add(generateFruitFly(62, groundY - 8, 8));
+      addCheckpoint(3, 65, groundY - 8 - 1);
+      
+      // Spiked Platforms & Spiders
+      addFloor(70, 30);
+      add(createSofa(75, groundY, 5, COLORS.furniture.sofaBlue));
+      add(generateSpider(76, groundY - 3.7, 3));
+      add(generateSpikedMovingPlatform(85, groundY - 6, 3, 10, 'x', 'bottom')); // Spikes on bottom here
+      add(generateSpider(90, groundY - 1, 8));
+      
+      addPit(100, 25);
+      add(generateRect(102, groundY - 2, 2, 1, COLORS.platforms.wood));
+      add(generateSpikedLamp(108, 9));
+      add(generateSpikedLamp(112, 9));
+      add(generateMovingPlatform(115, groundY - 4, 2, 8, 'x'));
+      addCheckpoint(4, 126, groundY);
+      addFloor(125, 10);
+
+      // The Grinder
+      addPit(135, 40);
+      add(generateSpikedMovingPlatform(140, groundY - 2, 3, 6, 'y'));
+      add(generateSpikedMovingPlatform(150, groundY - 8, 3, 6, 'y'));
+      add(generateSpikedMovingPlatform(160, groundY - 2, 3, 6, 'y'));
+      
+      add(generateRect(145, groundY - 10, 2, 1, COLORS.platforms.wood)); // Rest spots
+      add(generateRect(155, groundY - 10, 2, 1, COLORS.platforms.wood));
+      
+      addFloor(175, 15);
+      add(createTVStand(180, groundY));
+      add(generateFruitFly(180, groundY - 3, 5));
+      addCheckpoint(5, 185, groundY);
+      
+      // Final Precision
+      addPit(190, 30);
+      add(generateFallingSpike(189, 0));
+      add(generateMovingPlatform(195, groundY - 2, 2, 6, 'x')); // Static floating
+      add(generateSpikedLamp(200, 10));
+      add(generateMovingPlatform(205, groundY - 5, 2, 8, 'x'));
+      add(generateFruitFly(205, groundY - 6, 10));
+      
+      addFloor(220, 20);
+      addCheckpoint(6, 230, groundY);
   }
 
   // --- Boundaries ---

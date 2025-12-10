@@ -144,6 +144,101 @@ export const drawSpider = (ctx: CanvasRenderingContext2D, camera: Camera, spider
     }
 };
 
+export const drawFruitFly = (ctx: CanvasRenderingContext2D, camera: Camera, fly: Entity) => {
+    const x = fly.x - camera.x;
+    const y = fly.y - camera.y;
+    const w = fly.width;
+    const h = fly.height;
+    
+    const centerX = x + w / 2;
+    const centerY = y + h / 2;
+
+    const time = Date.now() / 40; 
+    const wingOffset = Math.sin(time) * 6;
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    
+    // Face direction based on velocity
+    if ((fly.vx || 0) > 0) {
+        ctx.scale(-1, 1); 
+    }
+
+    // -- Back Wing --
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.beginPath();
+    ctx.ellipse(5, -5 + wingOffset/2, 10, 4, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#bdc3c7';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // -- Legs --
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    // Front leg
+    ctx.moveTo(-5, 5);
+    ctx.lineTo(-7, 10 + Math.sin(time/2)*2);
+    // Middle leg
+    ctx.moveTo(0, 6);
+    ctx.lineTo(0, 12 + Math.cos(time/2)*2);
+    // Back leg
+    ctx.moveTo(5, 5);
+    ctx.lineTo(7, 10 + Math.sin(time/2+1)*2);
+    ctx.stroke();
+
+    // -- Body (Thorax + Abdomen) --
+    // Abdomen (Rear)
+    ctx.fillStyle = COLORS.enemies.fruitFly; // Purple
+    ctx.beginPath();
+    ctx.ellipse(6, 2, 7, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#1a252f';
+    ctx.stroke();
+    
+    // Stripes on abdomen
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.fillRect(2, -3, 2, 10);
+    ctx.fillRect(7, -3, 2, 10);
+
+    // Thorax (Front/Head area)
+    ctx.fillStyle = '#2c3e50'; // Dark Grey/Blue
+    ctx.beginPath();
+    ctx.ellipse(-4, 0, 6, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // -- Eye --
+    ctx.fillStyle = '#e74c3c'; // Red
+    ctx.beginPath();
+    ctx.arc(-8, -2, 4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Eye shine
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(-9, -3, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Proboscis (Mouth)
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-8, 3);
+    ctx.quadraticCurveTo(-10, 8, -6, 10);
+    ctx.stroke();
+
+    // -- Front Wing --
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.beginPath();
+    ctx.ellipse(3, -8 - wingOffset/2, 11, 5, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.stroke();
+
+    ctx.restore();
+};
+
 export const drawCheckpoint = (ctx: CanvasRenderingContext2D, camera: Camera, cp: Entity, isPassed: boolean) => {
     // Hide checkpoint if not revealed yet
     if (cp.visible === false) return; 

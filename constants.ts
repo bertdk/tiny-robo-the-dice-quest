@@ -19,7 +19,7 @@ export const PLAYER_WIDTH = 30;
 export const PLAYER_HEIGHT = 48;
 export const DUCK_HEIGHT = 24;
 
-export const MAX_LEVELS = 6;
+export const MAX_LEVELS = 8;
 export const CHECKPOINTS_PER_LEVEL = 6;
 
 // Powerup Constants
@@ -64,6 +64,10 @@ export const COLORS = {
     bookSpine: ['#e74c3c', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6'],
     lampShade: '#f1c40f',
     lampDark: '#f39c12'
+  },
+  enemies: {
+    fruitFly: '#8e44ad',
+    fruitFlyWing: '#ecf0f1'
   },
   ui: {
     text: '#333',

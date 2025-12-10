@@ -19,7 +19,8 @@ export enum EntityType {
   LAMP,
   PROJECTILE,
   MOVING_PLATFORM,
-  FALLING_SPIKE
+  FALLING_SPIKE,
+  FRUIT_FLY
 }
 
 export enum BlockType {
@@ -56,6 +57,7 @@ export interface Entity {
   patrolMin?: number;
   patrolMax?: number;
   axis?: 'x' | 'y';
+  attachedTo?: string; // ID of the entity this is moving with
   
   // New Block Physics
   falling?: boolean;
@@ -65,6 +67,7 @@ export interface Entity {
   triggered?: boolean;
   triggerTime?: number;
   originalY?: number;
+  static?: boolean; // If true, it acts as a fixed hazard (hanging spike)
 }
 
 export interface PlayerState extends Entity {
